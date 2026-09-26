@@ -47,6 +47,16 @@ commits themselves are left out.
   - `appVersionCode` must be **higher than the previous release's**. Android refuses to install
     a lower or equal version code as an update.
 
+## Supported Android versions
+
+`minSdk` (in [`app/build.gradle.kts`](app/build.gradle.kts)) is the **oldest Android version that
+still gets security updates**, i.e. the oldest one in the "Updated AOSP versions" of the latest
+[Android Security Bulletin](https://source.android.com/docs/security/bulletin). Older versions
+are dropped, unless that would break a critical feature. Check it at each release.
+
+- 2026-09: the bulletin covers Android 14, 15, 16 and 17 → `minSdk 34` (Android 14).
+- `targetSdk` is the newest Android version (currently 36; 37 is tracked in #23).
+
 ## Steps
 
 1. **Pick the version** and set `appVersionName` / `appVersionCode` in `gradle.properties`

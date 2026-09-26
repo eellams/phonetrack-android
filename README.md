@@ -64,6 +64,10 @@ If you want to log to Nextcloud PhoneTrack :
 
 ## Install
 
+Requires **Android 14 or newer** (the Android versions that still get security updates; see
+[RELEASING.md](RELEASING.md#supported-android-versions)). Release 0.2.0 still runs on Android 8.0+.
+
+
 * APK Direct download : [this fork's GitHub Releases](https://github.com/lazzurs/phonetrack-android/releases) (built automatically by GitHub Actions on every tag). Each release has `phonetrack-<version>-normal.apk` (use this one), `phonetrack-<version>-play.apk`, and `SHA256SUMS.txt` to verify the download. How releases are made: [RELEASING.md](RELEASING.md)
 * Upstream also publishes builds via [Gitlab CI artifacts](https://gitlab.com/eneiluj/phonetrack-android/pipelines)
 * The original app (a separate app, `net.eneiluj.nextcloud.phonetrack`) is on F-Droid: [![PhoneTrack App on fdroid.org](https://gitlab.com/eneiluj/phonetrack-android/wikis/uploads/57bb389a0c40f5cb81dc1ae21a314adb/fd.png)](https://f-droid.org/packages/net.eneiluj.nextcloud.phonetrack/)

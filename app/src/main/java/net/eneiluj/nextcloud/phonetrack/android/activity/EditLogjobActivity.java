@@ -3,7 +3,6 @@ package net.eneiluj.nextcloud.phonetrack.android.activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.ColorDrawable;
-import android.os.Build;
 import android.os.Bundle;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.ActionBar;

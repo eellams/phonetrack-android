@@ -2,7 +2,6 @@ package net.eneiluj.nextcloud.phonetrack.util;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -78,7 +77,7 @@ public final class SmsSenderAllowlist {
      * "087 123 4567" on an Irish SIM.
      */
     private static boolean samePhoneNumber(String a, String b, @Nullable String countryIso) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && countryIso != null && !countryIso.isEmpty()) {
+        if (countryIso != null && !countryIso.isEmpty()) {
             return PhoneNumberUtils.areSamePhoneNumber(a, b, countryIso);
         }
         return PhoneNumberUtils.compare(a, b);

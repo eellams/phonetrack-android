@@ -17,7 +17,6 @@ import android.media.AudioManager;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -160,10 +159,8 @@ public class SmsAlarmService extends Service {
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build());
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                // ring for the whole duration, not just once
-                ringtone.setLooping(true);
-            }
+            // ring for the whole duration, not just once
+            ringtone.setLooping(true);
             ringtone.play();
         }
         ringing = true;

@@ -95,7 +95,7 @@
                         android:padding="12dp"
                         android:tooltipText="@string/manage_accounts"
                         app:srcCompat="@drawable/ic_account_circle_grey_24dp"
-                        tools:targetApi="o" />
+                       />
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
