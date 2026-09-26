@@ -2,7 +2,9 @@ package net.eneiluj.nextcloud.phonetrack.util;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.robolectric.Shadows.shadowOf;
 
+import android.app.Application;
 import android.content.Context;
 
 import androidx.preference.PreferenceManager;
@@ -81,9 +83,14 @@ public class LocalNetworkAccessTest {
     }
 
     @Test
-    public void notNeededWhileTheAppTargetsAnOlderSdk() {
-        // this build targets 36: even a LAN server must not trigger a prompt yet
+    public void neededForALocalServerUntilGranted() {
+        // the app targets Android 17 and the tests emulate it: the permission is enforced
         Context context = ApplicationProvider.getApplicationContext();
+        assertTrue(LocalNetworkAccess.isEnforced(context));
+        assertTrue(LocalNetworkAccess.isNeededFor(context, Arrays.asList("https://8.8.8.8", "https://192.168.1.10")));
+        assertFalse(LocalNetworkAccess.isNeededFor(context, Arrays.asList("https://8.8.8.8")));
+
+        shadowOf((Application) context).grantPermissions(LocalNetworkAccess.PERMISSION);
         assertFalse(LocalNetworkAccess.isNeededFor(context, Arrays.asList("https://192.168.1.10")));
     }
 }

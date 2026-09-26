@@ -11,9 +11,8 @@ val hasReleaseSigning = !releaseKeystorePath.isNullOrEmpty() && !releaseKeystore
 
 android {
     namespace = "net.eneiluj.nextcloud.phonetrack"
-    // compileSdk tracks the newest stable platform; targetSdk is what Google Play
-    // currently requires (API 36 since 2026-08-31). Raising targetSdk opts the app
-    // into that release's behavior changes, so bump it deliberately and test.
+    // compileSdk and targetSdk track the newest Android version (Android 17). Raising targetSdk
+    // opts the app into that release's behavior changes: bump it deliberately and test on it.
     compileSdk = 37
 
     defaultConfig {
@@ -23,7 +22,7 @@ android {
         // Oldest Android version still in Google's monthly security bulletin (Android 14, see
         // RELEASING.md). Raise it when that version drops out of the bulletin.
         minSdk = 34
-        targetSdk = 36
+        targetSdk = 37
         // from gradle.properties, the single source of the version (see RELEASING.md)
         versionCode = providers.gradleProperty("appVersionCode").get().toInt()
         versionName = providers.gradleProperty("appVersionName").get()
