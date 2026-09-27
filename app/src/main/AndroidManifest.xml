@@ -205,5 +205,14 @@
             </intent-filter>
         </receiver>
 
+        <!-- cert4android's certificate dialog. The library exports it and applies a trust
+             decision passed as an intent extra, so any installed app could make PhoneTrack
+             trust its own certificate (and read the traffic to the server). Only PhoneTrack
+             opens it: directly, or through its own notification's PendingIntent. -->
+        <activity
+            android:name="at.bitfire.cert4android.TrustCertificateActivity"
+            android:exported="false"
+            tools:replace="android:exported" />
+
     </application>
 </manifest>

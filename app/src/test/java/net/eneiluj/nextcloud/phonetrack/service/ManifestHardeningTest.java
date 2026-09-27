@@ -70,6 +70,15 @@ public class ManifestHardeningTest {
     }
 
     @Test
+    public void certificateDialogIsNotExported() throws Exception {
+        // cert4android exports it and trusts the certificate in its intent when asked to:
+        // exported, any app could make PhoneTrack trust a certificate of its choosing
+        android.content.pm.ActivityInfo info = pm.getActivityInfo(
+                new ComponentName(context, "at.bitfire.cert4android.TrustCertificateActivity"), 0);
+        assertFalse(info.exported);
+    }
+
+    @Test
     public void bootReceiverIsNotExported() throws Exception {
         android.content.pm.ActivityInfo info = pm.getReceiverInfo(new ComponentName(context, BootCompletedReceiver.class), 0);
         assertFalse(info.exported);
