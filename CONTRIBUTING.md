@@ -34,6 +34,10 @@ Release notes and `CHANGELOG.md` are generated from commit messages, so they fol
 or `fix(security): only accept SMS from allowed senders`. CI checks it; the types and the release
 process are in [RELEASING.md](RELEASING.md).
 
+Please don't change the app version (`appVersionName` / `appVersionCode` in `gradle.properties`) in a
+pull request: merging a new version publishes a release, so CI rejects that from forks. Releases are
+prepared by the maintainers.
+
 ## Adding new features
 
 If you want to contribute on the code, you can fork the project, commit your changes and make a pull request. For bigger features/changes, it's better to first [open an issue](https://gitlab.com/eneiluj/phonetrack-android/issues) and ask if this feature is needed or wanted – it would be very disappointing if you add a new cool feature and your pull request will be rejected by some reasons you didn't thought about.

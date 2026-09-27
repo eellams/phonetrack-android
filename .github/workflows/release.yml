@@ -1,33 +1,82 @@
 name: Release
 
-# A v* tag publishes a release (vX.Y.Z = full release, vX.Y.Z-suffix = pre-release).
-# Run manually for a dry run: everything is built and checked, and the would-be release
-# (notes, APKs, checksums) is uploaded as a workflow artifact instead. See RELEASING.md.
+# Publishes a release (see RELEASING.md):
+#   - push to main: when appVersionName in gradle.properties has no vX.Y.Z tag yet, i.e. a release
+#     pull request (opened by prepare-release.yml) was merged, tags the merge commit and publishes it
+#   - push of a v* tag: publishes that tag (vX.Y.Z = full release, vX.Y.Z-suffix = pre-release)
+#   - run manually: dry run, everything is built and checked and the would-be release (notes,
+#     signed APKs, checksums) is uploaded as a workflow artifact instead
+# Nothing here runs for pull requests, so code from other repositories never gets the signing key.
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build signed APKs and publish release (dry run unless tagged)
+  plan:
+    name: Decide what to release
     runs-on: ubuntu-latest
-    env:
-      RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      publish: ${{ steps.plan.outputs.publish }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Decide
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          build=true publish=false tag=
+          if [[ $EVENT == workflow_dispatch ]]; then
+            echo "Dry run of the version in gradle.properties"
+          elif [[ $REF_TYPE == tag ]]; then
+            publish=true tag=$REF_NAME
+          else
+            version=$(grep -E '^appVersionName=' gradle.properties | tail -1 | cut -d= -f2 | tr -d '[:space:]')
+            tag=v$version
+            rc=0
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || rc=$?
+            case $rc in
+              0) echo "$tag is already released: nothing to publish"; build=false tag= ;;
+              2) echo "$tag is not released yet: publishing it from $GITHUB_SHA"; publish=true ;;
+              *) echo "::error::could not list the tags of origin (git ls-remote exit code $rc)"; exit 1 ;;
+            esac
+          fi
+          printf 'build=%s\npublish=%s\ntag=%s\n' "$build" "$publish" "$tag" | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    name: Build signed APKs
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    # read-only token: this job runs the Gradle build, i.e. third-party plugins and dependencies
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      artifact: ${{ steps.artifact.outputs.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           # all tags: the version code is compared with the previous release's
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install git-cliff
         # generates the release notes from the commit messages (cliff.toml)
@@ -35,8 +84,22 @@ jobs:
 
       - name: Check version and write release notes
         id: meta
-        # a dry run checks the release of the version in gradle.properties
-        run: scripts/release/prepare.sh "${{ github.ref_type == 'tag' && github.ref_name || '' }}" release-out
+        # a dry run (no tag) checks the release of the version in gradle.properties
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: scripts/release/prepare.sh "$TAG" release-out
+
+      - name: Name the artifact
+        id: artifact
+        env:
+          PUBLISH: ${{ needs.plan.outputs.publish }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if [[ $PUBLISH == true ]]; then
+            echo "name=release-$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=release-dry-run-$VERSION" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
@@ -59,6 +122,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Run unit tests
+        # AGP 9 only wires up unit test tasks for the Debug build type (its
+        # testBuildType default) across all flavors - there's no
+        # testNormalReleaseUnitTest task any more. Same test source, so
+        # testing the normal flavor's Debug variant is an equivalent check.
+        run: ./gradlew -Pci --console=plain :app:testNormalDebugUnitTest
+
+      # the signing secrets are only given to the two steps that need them
       - name: Decode release keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -70,15 +141,14 @@ jobs:
             echo "::warning::RELEASE_KEYSTORE_BASE64 secret not set; release APKs will be debug-signed."
           fi
 
-      - name: Run unit tests
-        # AGP 9 only wires up unit test tasks for the Debug build type (its
-        # testBuildType default) across all flavors - there's no
-        # testNormalReleaseUnitTest task any more. Same test source, so
-        # testing the normal flavor's Debug variant is an equivalent check.
-        run: ./gradlew -Pci --console=plain :app:testNormalDebugUnitTest
-
       - name: Assemble release APKs
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         run: ./gradlew -Pci --console=plain assembleNormalRelease assemblePlayRelease
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
 
       - name: Collect APKs
         env:
@@ -95,24 +165,74 @@ jobs:
           (cd release-out && sha256sum phonetrack-*.apk phonetrack-*-mapping.txt > SHA256SUMS.txt)
           cat release-out/SHA256SUMS.txt
 
+      # a dry run's artifact is the APK to test on a device; a release's is what the publish job
+      # uploads (with required reviewers on the "release" environment, it can be tested first)
+      - name: Upload release
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: release-out/
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.plan.outputs.tag }}
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download release
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: release-out
+
+      - name: Tag the release
+        # a tag pushed with the workflow's token starts no other workflow run, so this doesn't
+        # publish twice
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            tagged=$(git rev-parse "$TAG^{commit}")
+            if [[ $tagged != "$GITHUB_SHA" ]]; then
+              echo "::error::$TAG already exists on $tagged, not on $GITHUB_SHA"
+              exit 1
+            fi
+            echo "$TAG already on $GITHUB_SHA"
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                tag -a "$TAG" -m "PhoneTrack $VERSION" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+
       - name: Create GitHub release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          name: PhoneTrack ${{ steps.meta.outputs.version }}
+          tag_name: ${{ needs.plan.outputs.tag }}
+          name: PhoneTrack ${{ needs.build.outputs.version }}
           # highlights (optional) + notes generated from the commit messages
           body_path: release-out/RELEASE_NOTES.md
-          prerelease: ${{ steps.meta.outputs.prerelease }}
-          make_latest: ${{ steps.meta.outputs.prerelease == 'true' && 'false' || 'true' }}
+          prerelease: ${{ needs.build.outputs.prerelease }}
+          make_latest: ${{ needs.build.outputs.prerelease == 'true' && 'false' || 'true' }}
           files: |
             release-out/phonetrack-*.apk
             release-out/phonetrack-*-mapping.txt
             release-out/SHA256SUMS.txt
 
       - name: Add the release to CHANGELOG.md on main
-        if: github.ref_type == 'tag' && steps.meta.outputs.prerelease == 'false'
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
+        if: needs.build.outputs.prerelease == 'false'
         run: |
           git fetch origin main
           git switch --detach origin/main
@@ -126,11 +246,3 @@ jobs:
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "docs(changelog): $VERSION"
           git push origin HEAD:main
-
-      - name: Upload dry-run release
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-dry-run-${{ steps.meta.outputs.version }}
-          path: release-out/
-          if-no-files-found: error

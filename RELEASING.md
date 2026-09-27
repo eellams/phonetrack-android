@@ -1,8 +1,11 @@
 # Releasing
 
-Releases are built and published by [`.github/workflows/release.yml`](.github/workflows/release.yml)
-when a version tag is pushed. The release notes and [`CHANGELOG.md`](CHANGELOG.md) are **generated
-from the commit messages**; nobody writes them by hand.
+Releases are automated: the **Prepare release** workflow
+([`.github/workflows/prepare-release.yml`](.github/workflows/prepare-release.yml)) opens a pull request
+that sets the next version, and **merging it publishes the release**
+([`.github/workflows/release.yml`](.github/workflows/release.yml)). The version, the release notes and
+[`CHANGELOG.md`](CHANGELOG.md) are all **derived from the commit messages**; nobody writes them by hand,
+and no local git commands are needed.
 
 Each release gets:
 
@@ -46,6 +49,14 @@ commits themselves are left out.
   - `appVersionName` must equal the tag without the `v`;
   - `appVersionCode` must be **higher than the previous release's**. Android refuses to install
     a lower or equal version code as an update.
+- The next version is computed from the commits since the previous release
+  (`git-cliff --bumped-version`, `[bump]` in [`cliff.toml`](cliff.toml)): a breaking change
+  (`type!:` or a `BREAKING CHANGE:` footer) bumps the major version, `feat:` the minor, anything else
+  the patch. While the version is `0.x`, a breaking change bumps the minor instead. `appVersionCode`
+  goes up by one.
+- **A new `appVersionName` on `main` is a release**: on every push to `main`, the release workflow
+  publishes `v<appVersionName>` if that tag doesn't exist yet. So pull requests from other
+  repositories can't change the version (CI fails them, `scripts/release/check-version-unchanged.sh`).
 
 ## Supported Android versions
 
@@ -59,27 +70,55 @@ are dropped, unless that would break a critical feature. Check it at each releas
 
 ## Steps
 
-1. **Pick the version** and set `appVersionName` / `appVersionCode` in `gradle.properties`
-   (commit: `build: release X.Y.Z`).
-2. *Optional*: write `.github/release-highlights/X.Y.Z.md`, a short introduction above the
-   generated notes. Use it for what users **have to do** after updating.
-3. Open a pull request. CI checks the version and prints a preview of the notes in the
-   "Check release metadata" step (`scripts/release/prepare.sh`).
-4. **Test a release build on a device** (it's optimized by R8, unlike debug builds): run the
-   workflow manually (*Actions → Release → Run workflow* on `main`) for a dry run and install the
-   APK from the uploaded artifact. The artifact also contains the notes.
-5. Merge, then tag the merge commit and push the tag:
+1. *Actions → Prepare release → Run workflow* on `main`. Leave the version empty to compute it, or
+   set it (e.g. `1.0.0`). The workflow:
+   - sets `appVersionName` / `appVersionCode` in `gradle.properties`;
+   - pushes the branch `release/next` (commit `build: release X.Y.Z`) and opens or updates the
+     pull request `build: release X.Y.Z`, with the release notes in its description;
+   - starts the Build workflow and a Release **dry run** on that branch (a push with the workflow's
+     token starts no workflow by itself).
 
-   ```sh
-   git switch main && git pull
-   git tag -a vX.Y.Z -m "PhoneTrack X.Y.Z"
-   git push origin vX.Y.Z
-   ```
+   It fails if there is nothing to release (no `feat:`, `fix:`, ... commits since the previous
+   release). Running it again rebuilds `release/next` from `main`; only the highlights are kept.
+2. *Optional*: add `.github/release-highlights/X.Y.Z.md` to the `release/next` branch, a short
+   introduction above the generated notes. Use it for what users **have to do** after updating.
+3. **Test a release build on a device** (it's optimized by R8, unlike debug builds): install the
+   APK from the artifact of the Release dry run on `release/next`. The artifact also contains the
+   notes.
+4. **Merge the pull request** (merge commit). The Release workflow then tags the merge commit
+   `vX.Y.Z`, builds and publishes the release, and commits `docs(changelog): X.Y.Z` to `main`.
+5. Check the published release.
 
-6. Check the published release, and the `docs(changelog): X.Y.Z` commit on `main`.
+The publish job runs in the `release` [environment](https://docs.github.com/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments):
+with required reviewers on it, the release waits for an approval after the signed APKs are built
+(they're in the run's artifact), another chance to test them.
 
-To preview locally: `pipx install git-cliff`, then `scripts/release/prepare.sh` (writes
-`release-out/RELEASE_NOTES.md` and `release-out/CHANGELOG_ENTRY.md`).
+**Pre-release** (optional, before step 4): tag the head of `release/next`, e.g.
+`git tag -a v0.4.0-rc.1 -m "PhoneTrack 0.4.0-rc.1" origin/release/next && git push origin v0.4.0-rc.1`.
+Merging the pull request afterwards still publishes the full release.
+
+**By hand** (e.g. if the workflow is broken): set the version in `gradle.properties` in a pull
+request from a branch of this repository, and merge it; or push a `vX.Y.Z` tag on a commit whose
+`gradle.properties` has that version. The same checks run either way.
+
+To preview locally: `pipx install git-cliff`, then `scripts/release/bump.sh` (sets the next version)
+and `scripts/release/prepare.sh` (writes `release-out/RELEASE_NOTES.md` and
+`release-out/CHANGELOG_ENTRY.md`).
+
+## Open source safety
+
+Only people with write access can release. Nothing that handles the signing key or pushes to the
+repository runs for pull requests: `build.yml` runs on `pull_request` (read-only token, no secrets
+for forks), and there is no `pull_request_target` workflow. Keep it that way:
+
+- The release workflow runs only on pushes to `main`, `v*` tag pushes and manual runs, i.e. on
+  code a maintainer merged or pushed. Its build job, which runs Gradle and so third-party code, has a
+  read-only token and gets the signing secrets only in the two steps that need them; only the
+  publish job can push.
+- Pull requests from other repositories can't change the version, since merging one would publish
+  a release.
+- Workflow inputs and event data reach scripts through environment variables, never through
+  `${{ }}` inside `run:`.
 
 ## Signing
 

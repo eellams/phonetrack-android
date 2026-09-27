@@ -1,0 +1,121 @@
+name: Prepare release
+
+# Opens (or updates) the release pull request from main: the next version, computed from the
+# commits since the previous release, and a preview of its notes. Merging the pull request
+# publishes the release (release.yml). See RELEASING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version X.Y.Z (leave empty to compute it from the commit messages)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write      # push the release branch
+  pull-requests: write # open or update the release pull request
+  actions: write       # start its checks: a push with the workflow's token starts no workflow run
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+env:
+  BRANCH: release/next
+
+jobs:
+  prepare:
+    name: Open the release pull request
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # all tags and branches: the version comes from the commits since the previous release
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        run: pipx install git-cliff==2.14.2
+
+      - name: Set the next version
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+        run: scripts/release/bump.sh "$VERSION"
+
+      # re-running rebuilds the branch from main; highlights added to it are kept
+      - name: Keep the release highlights of the existing branch
+        id: previous
+        run: |
+          old=$(git rev-parse -q --verify "refs/remotes/origin/$BRANCH" || true)
+          echo "sha=$old" >> "$GITHUB_OUTPUT"
+          if [[ -n $old ]]; then
+            git diff -z --name-only --diff-filter=AM "origin/main...$old" -- .github/release-highlights/ \
+              | xargs -0 -r git checkout "$old" --
+          fi
+
+      - name: Check the release and write the notes
+        id: meta
+        run: scripts/release/prepare.sh "" release-out
+
+      - name: Push the release branch
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          OLD_SHA: ${{ steps.previous.outputs.sha }}
+        run: |
+          git switch -C "$BRANCH"
+          # (highlights kept from the old branch are already staged)
+          git add gradle.properties
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "build: release $VERSION"
+          # fails instead of overwriting commits pushed to the branch while this ran
+          git push --force-with-lease="refs/heads/$BRANCH:$OLD_SHA" origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Open or update the pull request
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          VERSION_CODE: ${{ steps.bump.outputs.version_code }}
+          INPUT_VERSION: ${{ inputs.version }}
+          PREVIOUS: ${{ steps.meta.outputs.previous_release }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          highlights=".github/release-highlights/$VERSION.md"
+          {
+            echo "Merging this pull request publishes **PhoneTrack $VERSION** (tag \`v$VERSION\`, versionCode $VERSION_CODE): the Release workflow tags the merge commit, builds the signed APKs and adds the notes below to CHANGELOG.md."
+            echo
+            echo "- The version was ${INPUT_VERSION:+set by hand}${INPUT_VERSION:-computed from the commits since ${PREVIOUS:-the first commit}}."
+            echo "- Checks for this branch: [Build and release dry run]($REPO_URL/actions?query=branch%3A${BRANCH//\//%2F}). The dry run's artifact has the signed APKs, **test one on a device** before merging."
+            if [[ -s $highlights ]]; then
+              echo "- Highlights: \`$highlights\`."
+            else
+              echo "- Optional: add \`$highlights\` to this branch, an introduction above the notes."
+            fi
+            for f in .github/release-highlights/*.md; do
+              if [[ -e $f && $f != "$highlights" ]] && ! git cat-file -e "origin/main:$f" 2>/dev/null; then
+                echo "- :warning: \`$f\` doesn't match the version $VERSION: rename it."
+              fi
+            done
+            echo "- Running *Prepare release* again rebuilds this branch from main (keeping the highlights)."
+            echo
+            echo "## Release notes"
+            echo
+            cat release-out/RELEASE_NOTES.md
+          } > "$RUNNER_TEMP/pr-body.md"
+          title="build: release $VERSION"
+          number=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+          if [[ -n $number ]]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"
+          elif ! gh pr create --base main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"; then
+            # "Allow GitHub Actions to create and approve pull requests" is off in the settings
+            echo "::warning::Could not open the pull request; open it by hand: $REPO_URL/compare/main...$BRANCH"
+          fi
+          cat "$RUNNER_TEMP/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start the checks
+        run: |
+          gh workflow run build.yml --ref "$BRANCH"
+          gh workflow run release.yml --ref "$BRANCH"

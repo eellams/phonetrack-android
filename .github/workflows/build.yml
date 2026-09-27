@@ -25,7 +25,17 @@ jobs:
       # release notes and CHANGELOG.md are generated from the commit messages
       - name: Check commit messages (Conventional Commits)
         if: github.event_name == 'pull_request'
-        run: scripts/release/check-commits.sh "origin/${{ github.base_ref }}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/release/check-commits.sh "origin/$BASE_REF"
+
+      # merging a new version to main publishes a release (release.yml), so only the
+      # "Prepare release" workflow and maintainers change it, never a pull request from a fork
+      - name: Check the app version is unchanged (pull requests from other repositories)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/release/check-version-unchanged.sh "origin/$BASE_REF"
 
       - name: Install git-cliff
         run: pipx install git-cliff==2.14.2
