@@ -45,3 +45,10 @@ commit_parsers = [
     { message = "^(build|ci|chore)", group = "<!-- 4 -->Build and CI" },
     { message = "^docs", group = "<!-- 5 -->Documentation" },
 ]
+
+# Next version for the "Prepare release" workflow (git-cliff --bumped-version): a breaking change
+# (type!: or BREAKING CHANGE:) bumps the major version, feat: the minor, anything else the patch.
+# While the version is 0.x a breaking change bumps the minor instead (SemVer: 0.x may break).
+[bump]
+features_always_bump_minor = true
+breaking_always_bump_major = false
