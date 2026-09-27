@@ -50,7 +50,6 @@ import android.widget.GridLayout;
 import android.widget.Toast;
 
 
-import at.bitfire.cert4android.CustomCertManager;
 import net.eneiluj.nextcloud.phonetrack.R;
 
 import net.eneiluj.nextcloud.phonetrack.android.activity.EditMapsLogjobActivity;
@@ -61,6 +60,7 @@ import net.eneiluj.nextcloud.phonetrack.android.activity.SyslogManagerActivity;
 import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
 import net.eneiluj.nextcloud.phonetrack.service.LoggerService;
+import net.eneiluj.nextcloud.phonetrack.util.CertificateTrust;
 import net.eneiluj.nextcloud.phonetrack.util.MapUtils;
 import net.eneiluj.nextcloud.phonetrack.util.PhoneTrack;
 import net.eneiluj.nextcloud.phonetrack.util.SmsSenderAllowlist;
@@ -131,7 +131,7 @@ public class PreferencesFragment extends PreferenceFragmentCompat implements Pre
         resetTrust.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
-                CustomCertManager.Companion.resetCertificates(getActivity());
+                CertificateTrust.resetUserDecisions(requireContext());
                 Toast.makeText(getActivity(), getString(R.string.settings_cert_reset_toast), Toast.LENGTH_SHORT).show();
                 return true;
             }

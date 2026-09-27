@@ -1,9 +1,7 @@
 package net.eneiluj.nextcloud.phonetrack.persistence;
 
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
@@ -11,12 +9,11 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.net.NetworkRequest;
-import android.os.IBinder;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.WorkerThread;
 import androidx.preference.PreferenceManager;
 
-import android.os.RemoteException;
 import android.util.Log;
 
 import com.google.gson.GsonBuilder;
@@ -38,9 +35,6 @@ import java.util.Map;
 import java.util.Set;
 
 import at.bitfire.cert4android.CustomCertManager;
-import at.bitfire.cert4android.CustomCertService;
-import at.bitfire.cert4android.ICustomCertService;
-import at.bitfire.cert4android.IOnCertificateDecision;
 
 import net.eneiluj.nextcloud.phonetrack.R;
 import net.eneiluj.nextcloud.phonetrack.android.activity.SettingsActivity;
@@ -48,13 +42,13 @@ import net.eneiluj.nextcloud.phonetrack.model.BasicLocation;
 import net.eneiluj.nextcloud.phonetrack.model.DBSession;
 import net.eneiluj.nextcloud.phonetrack.service.LoggerService;
 import net.eneiluj.nextcloud.phonetrack.util.BackgroundTask;
+import net.eneiluj.nextcloud.phonetrack.util.CertificateTrust;
 import net.eneiluj.nextcloud.phonetrack.util.CredentialStore;
 import net.eneiluj.nextcloud.phonetrack.util.ICallback;
 import net.eneiluj.nextcloud.phonetrack.util.IGetLastPosCallback;
 import net.eneiluj.nextcloud.phonetrack.util.PhoneTrackClient;
 import net.eneiluj.nextcloud.phonetrack.util.PhoneTrackClientUtil.LoginStatus;
 import net.eneiluj.nextcloud.phonetrack.util.ServerResponse;
-import net.eneiluj.nextcloud.phonetrack.util.SupportUtil;
 
 /**
  * Helps to synchronize the Database to the Server.
@@ -91,31 +85,9 @@ public class SessionServerSyncHelper {
     private final Context appContext;
 
     private CustomCertManager customCertManager;
-    private ICustomCertService iCustomCertService;
 
     // Track network connection changes using a BroadcastReceiver
     private boolean networkConnected = false;
-
-    private boolean cert4androidReady = false;
-    private final ServiceConnection certService = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            iCustomCertService = ICustomCertService.Stub.asInterface(iBinder);
-            cert4androidReady = true;
-            if (isSyncPossible()) {
-                scheduleSync(false);
-                Intent intent2 = new Intent(BROADCAST_NETWORK_AVAILABLE);
-                intent2.setPackage(appContext.getPackageName());
-                appContext.sendBroadcast(intent2);
-            }
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-            cert4androidReady = false;
-            iCustomCertService = null;
-        }
-    };
 
     // current state of the synchronization
     private boolean syncActive = false;
@@ -130,28 +102,16 @@ public class SessionServerSyncHelper {
     private SessionServerSyncHelper(PhoneTrackSQLiteOpenHelper db) {
         this.dbHelper = db;
         this.appContext = db.getContext().getApplicationContext();
-        new Thread() {
-            @Override
-            public void run() {
-                customCertManager = SupportUtil.getCertManager(appContext);
-            }
-        }.start();
 
         // track network connectivity changes
         connectionMonitor = new ConnectionStateMonitor();
         connectionMonitor.enable(appContext);
         updateNetworkStatus();
-        // bind to certifciate service to block sync attempts if service is not ready
-        appContext.bindService(new Intent(appContext, CustomCertService.class), certService, Context.BIND_AUTO_CREATE);
     }
 
     @Override
     protected void finalize() throws Throwable {
         connectionMonitor.disable(appContext);
-        appContext.unbindService(certService);
-        if (customCertManager != null) {
-            customCertManager.close();
-        }
         super.finalize();
     }
 
@@ -216,7 +176,7 @@ public class SessionServerSyncHelper {
 
     /**
      * Synchronization is only possible, if there is an active network connection and
-     * Cert4Android service is available.
+     * a server is configured.
      * SessionServerSyncHelper observes changes in the network connection.
      * The current state can be retrieved with this method.
      *
@@ -224,16 +184,16 @@ public class SessionServerSyncHelper {
      */
     public boolean isSyncPossible() {
         updateNetworkStatus();
-        //Log.d(TAG, networkConnected+ " " +isConfigured(appContext) +" "+ cert4androidReady);
-        return networkConnected && isConfigured(appContext) && cert4androidReady;
+        return networkConnected && isConfigured(appContext);
     }
 
-    public CustomCertManager getCustomCertManager() {
+    /** Created on first use: loading the user's trusted certificates reads a file. */
+    @WorkerThread
+    public synchronized CustomCertManager getCustomCertManager() {
+        if (customCertManager == null) {
+            customCertManager = CertificateTrust.newCertManager(appContext);
+        }
         return customCertManager;
-    }
-
-    public void checkCertificate(byte[] cert, IOnCertificateDecision callback) throws RemoteException {
-        iCustomCertService.checkTrusted(cert, true, false, callback);
     }
 
     /**
@@ -269,7 +229,7 @@ public class SessionServerSyncHelper {
      */
     public void scheduleSync(boolean onlyLocalChanges) {
         Log.d(TAG, "Sync requested (" + (onlyLocalChanges ? "onlyLocalChanges" : "full") + "; " + (syncActive ? "sync active" : "sync NOT active") + ") ...");
-        Log.d(TAG, "(network:" + networkConnected + "; conf:" + isConfigured(appContext) + "; cert4android:" + cert4androidReady + ")");
+        Log.d(TAG, "(network:" + networkConnected + "; conf:" + isConfigured(appContext) + ")");
         if (isSyncPossible() && (!syncActive || onlyLocalChanges)) {
             Log.d(TAG, "... starting now");
             SyncTask syncTask = new SyncTask(onlyLocalChanges);
@@ -374,7 +334,7 @@ public class SessionServerSyncHelper {
             LoginStatus status;
             try {
                 Map<String, DBSession> localTokenToSession = dbHelper.getTokenMap();
-                ServerResponse.SessionsResponse response = client.getSessions(customCertManager, lastModified, lastETag);
+                ServerResponse.SessionsResponse response = client.getSessions(getCustomCertManager(), lastModified, lastETag);
                 List<DBSession> remoteSessions = response.getSessions(dbHelper);
                 Set<String> remoteTokens = new HashSet<>();
                 // pull remote changes: update or create each remote session
@@ -548,7 +508,7 @@ public class SessionServerSyncHelper {
             LoginStatus status;
             try {
 
-                ServerResponse.CapabilitiesResponse response = client.getColor(customCertManager);
+                ServerResponse.CapabilitiesResponse response = client.getColor(getCustomCertManager());
                 String color = response.getColor();
 
                 status = LoginStatus.OK;
@@ -701,7 +661,7 @@ public class SessionServerSyncHelper {
             LoginStatus status = LoginStatus.OK;
             String sharetoken;
             try {
-                ServerResponse.ShareDeviceResponse response = client.shareDevice(customCertManager, token, deviceName);
+                ServerResponse.ShareDeviceResponse response = client.shareDevice(getCustomCertManager(), token, deviceName);
                 sharetoken = response.getPublicToken();
                 if (LoggerService.DEBUG) {
                     Log.i(TAG, "HERE IS THE TOKEN "+sharetoken);
@@ -797,7 +757,7 @@ public class SessionServerSyncHelper {
             LoginStatus status = LoginStatus.OK;
             locations = new HashMap<>();
             try {
-                ServerResponse.GetSessionPositionsResponse response = client.getSessionPositions(customCertManager, session, limit, lastTimestamp);
+                ServerResponse.GetSessionPositionsResponse response = client.getSessionPositions(getCustomCertManager(), session, limit, lastTimestamp);
                 locations = response.getPositions(session);
                 colors = response.getColors(session);
                 if (LoggerService.DEBUG) {
@@ -879,7 +839,7 @@ public class SessionServerSyncHelper {
             if (LoggerService.DEBUG) { Log.i(TAG, "STARTING share device"); }
             LoginStatus status = LoginStatus.OK;
             try {
-                ServerResponse.CreateSessionResponse response = client.createSession(customCertManager, sessionName);
+                ServerResponse.CreateSessionResponse response = client.createSession(getCustomCertManager(), sessionName);
                 sessionId = response.getSessionId();
                 if (LoggerService.DEBUG) {
                     Log.i(TAG, "HERE IS THE ID "+sessionId);
@@ -962,7 +922,7 @@ public class SessionServerSyncHelper {
             LoginStatus status;
             try {
 
-                ServerResponse.AvatarResponse response = client.getAvatar(customCertManager, null);
+                ServerResponse.AvatarResponse response = client.getAvatar(getCustomCertManager(), null);
                 String avatar = response.getAvatarString();
 
                 status = LoginStatus.OK;
