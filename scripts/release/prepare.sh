@@ -6,7 +6,8 @@
 # TAG defaults to v<appVersionName> (a dry run of the next release). Checks:
 #   - TAG is vX.Y.Z (full release) or vX.Y.Z-suffix (pre-release, e.g. v0.3.0-rc.1)
 #   - X.Y.Z equals appVersionName in gradle.properties
-#   - appVersionCode is higher than the one of the previous release tag
+#   - appVersionCode is higher than the one of the previous release tag (except a pre-release
+#     of this same version)
 #   - there is something to release: Conventional Commits since the previous full release
 # Writes to OUT_DIR (default: release-out):
 #   RELEASE_NOTES.md   .github/release-highlights/X.Y.Z.md if it exists (hand-written, optional),
@@ -24,8 +25,12 @@ fail() {
     exit 1
 }
 
+# the value of a property; exactly one line must set it (Gradle would use the last one)
 prop() {
-    grep -E "^$1=" gradle.properties | head -1 | cut -d= -f2- | tr -d '[:space:]'
+    local lines
+    lines=$(grep -E "^[[:space:]]*$1[[:space:]]*[=:]" gradle.properties || true)
+    [[ $(grep -c . <<< "$lines") == 1 ]] || fail "gradle.properties must set $1 exactly once"
+    cut -d= -f2- <<< "$lines" | tr -d '[:space:]'
 }
 
 version_name=$(prop appVersionName)
@@ -56,8 +61,10 @@ code_at() {
     echo "$code"
 }
 
-# previous release: the newest v* tag other than this one that is an ancestor of HEAD
-previous=$(git tag --list 'v*' --merged HEAD --sort=-creatordate | grep -vx "$tag" | head -1 || true)
+# previous release: the newest v* tag other than this one that is an ancestor of HEAD; pre-releases
+# of this same version (vX.Y.Z-rc.1 before vX.Y.Z) are the same build, so they may share its code
+previous=$(git tag --list 'v*' --merged HEAD --sort=-creatordate | grep -vx "$tag" \
+    | grep -vF "v$base-" | head -1 || true)
 if [[ -n $previous ]]; then
     previous_code=$(code_at "$previous")
     if [[ -n $previous_code ]] && (( version_code <= previous_code )); then
