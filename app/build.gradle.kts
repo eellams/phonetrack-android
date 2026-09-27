@@ -54,8 +54,8 @@ android {
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     buildFeatures {
@@ -102,8 +102,7 @@ android {
     }
 }
 
-// cert4android ships Java 21 class files, which JDK 17's javac can't read: compile with JDK 21.
-// The bytecode target stays Java 17 (compileOptions).
+// Compile with JDK 21 to match the Java 21 source/target (compileOptions).
 tasks.withType<JavaCompile>().configureEach {
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
