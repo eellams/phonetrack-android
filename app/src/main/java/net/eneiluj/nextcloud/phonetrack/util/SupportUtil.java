@@ -2,13 +2,9 @@ package net.eneiluj.nextcloud.phonetrack.util;
 
 import android.Manifest;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-//import android.preference.PreferenceManager;
 import androidx.annotation.Nullable;
-import androidx.preference.PreferenceManager;
-import androidx.annotation.WorkerThread;
 import androidx.core.content.ContextCompat;
 
 import android.os.PowerManager;
@@ -102,7 +98,7 @@ public class SupportUtil {
         HttpURLConnection httpCon = (HttpURLConnection) url.openConnection();
         if (ccm != null && url.getProtocol().equals("https")) {
             HttpsURLConnection httpsCon = (HttpsURLConnection) httpCon;
-            httpsCon.setHostnameVerifier(ccm.hostnameVerifier(httpsCon.getHostnameVerifier()));
+            httpsCon.setHostnameVerifier(ccm.new HostnameVerifier(httpsCon.getHostnameVerifier()));
             try {
                 SSLContext sslContext = SSLContext.getInstance("TLS");
                 sslContext.init(null, new TrustManager[]{ccm}, null);
@@ -116,12 +112,6 @@ public class SupportUtil {
             }
         }
         return httpCon;
-    }
-
-    @WorkerThread
-    public static CustomCertManager getCertManager(Context ctx) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(ctx);
-        return new CustomCertManager(ctx, preferences.getBoolean(ctx.getString(R.string.pref_key_trust_system_certs), true));
     }
 
     /**

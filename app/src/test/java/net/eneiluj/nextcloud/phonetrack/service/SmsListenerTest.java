@@ -76,7 +76,7 @@ public class SmsListenerTest {
         assertEquals("+31641600986", started.getStringExtra("from"));
     }
 
-    /** The app also starts unrelated services (cert4android), look for the SMS position reply only. */
+    /** Other services may have been started too, look for the SMS position reply only. */
     private Intent startedLocationReply() {
         Intent intent;
         while ((intent = shadowOf(app).getNextStartedService()) != null) {

@@ -1,7 +1,7 @@
 # R8 rules for release builds (isMinifyEnabled in app/build.gradle.kts).
 #
 # Components declared in the manifest and classes referenced from layout / preference XML
-# are kept automatically; AndroidX, Gson, Conscrypt and Nextcloud SSO ship their own rules.
+# are kept automatically; AndroidX, Gson and Nextcloud SSO ship their own rules.
 
 # Readable stack traces in crash reports and the in-app system log: keep line numbers,
 # and map them back with the mapping.txt attached to each release.
@@ -17,7 +17,7 @@
 #   mapsforge: render themes (XML) and the map file reader
 -keep class org.mapsforge.** { *; }
 -dontwarn org.mapsforge.**
-#   cert4android: custom certificate trust, data binding UI, Conscrypt provider setup
+#   cert4android: certificate trust and its dialog (security-sensitive, cheap to keep)
 -keep class at.bitfire.cert4android.** { *; }
 -dontwarn at.bitfire.cert4android.**
 

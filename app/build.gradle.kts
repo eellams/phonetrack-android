@@ -61,8 +61,6 @@ android {
     buildFeatures {
         // AGP 9 defaults this to false; defaultConfig/flavors below use resValue
         resValues = true
-        // solves cert4android crash
-        dataBinding = true
     }
 
     androidResources {
@@ -104,8 +102,15 @@ android {
     }
 }
 
-// Robolectric needs Java 21 to emulate SDK 35+. Only the unit tests run on it: the build
-// (and the bytecode target, see compileOptions) stays on JDK 17.
+// cert4android ships Java 21 class files, which JDK 17's javac can't read: compile with JDK 21.
+// The bytecode target stays Java 17 (compileOptions).
+tasks.withType<JavaCompile>().configureEach {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// Robolectric needs Java 21 to emulate SDK 35+.
 tasks.withType<Test>().configureEach {
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(21)
@@ -127,12 +132,11 @@ dependencies {
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.androidx.work.runtime)
-    // needed for cert4android (conflict resolution)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.cardview)
     implementation(libs.material)
 
     implementation(libs.cert4android)
-    implementation(libs.conscrypt.android)
     implementation(libs.nextcloud.sso)
     implementation(libs.gson)
 

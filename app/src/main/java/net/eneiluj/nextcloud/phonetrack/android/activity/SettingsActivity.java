@@ -2,6 +2,7 @@ package net.eneiluj.nextcloud.phonetrack.android.activity;
 
 import android.annotation.SuppressLint;
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -49,7 +50,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import at.bitfire.cert4android.CustomCertManager;
-import at.bitfire.cert4android.IOnCertificateDecision;
 import net.eneiluj.nextcloud.phonetrack.R;
 import net.eneiluj.nextcloud.phonetrack.android.fragment.LoginDialogFragment;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
@@ -57,6 +57,7 @@ import net.eneiluj.nextcloud.phonetrack.persistence.SessionServerSyncHelper;
 import net.eneiluj.nextcloud.phonetrack.service.LoggerService;
 import net.eneiluj.nextcloud.phonetrack.util.LocalNetworkAccess;
 import net.eneiluj.nextcloud.phonetrack.util.BackgroundTask;
+import net.eneiluj.nextcloud.phonetrack.util.CertificateTrust;
 import net.eneiluj.nextcloud.phonetrack.util.CredentialStore;
 import net.eneiluj.nextcloud.phonetrack.util.EdgeToEdgeUtil;
 import net.eneiluj.nextcloud.phonetrack.util.PhoneTrackClientUtil;
@@ -438,35 +439,24 @@ public class SettingsActivity extends AppCompatActivity {
             @SuppressLint("WebViewClientOnReceivedSslError")
             @Override
             public void onReceivedSslError(WebView view, final SslErrorHandler handler, SslError error) {
-                X509Certificate cert = getX509CertificateFromError(error);
-
-                try {
-                    final boolean[] accepted = new boolean[1];
-                    SessionServerSyncHelper.getInstance(PhoneTrackSQLiteOpenHelper.getInstance(getApplicationContext()))
-                            .checkCertificate(cert.getEncoded(), new IOnCertificateDecision.Stub() {
-                                @Override
-                                public void accept() {
-                                    Log.d("PhoneTrack", "cert accepted");
-                                    handler.proceed();
-                                    accepted[0] = true;
-                                }
-
-                                @Override
-                                public void reject() {
-                                    Log.d("PhoneTrack", "cert rejected");
-                                    handler.cancel();
-                                }
-                            });
-
-                    if (!accepted[0]) {
-                        // this should never happen, submit button is only enabled if url has been validated
-                        Log.e("PhoneTrack", "No response from certificate service");
-                        handler.cancel();
-                    }
-                } catch (Exception e) {
-                    Log.e("PhoneTrack", "Cert could not be verified");
+                final X509Certificate cert = getX509CertificateFromError(error);
+                if (cert == null) {
                     handler.cancel();
+                    return;
                 }
+                final Context appContext = getApplicationContext();
+                // blocks until the user decides in cert4android's dialog
+                new Thread(() -> {
+                    final boolean trusted = CertificateTrust.isTrustedByUser(appContext, cert);
+                    Log.d("PhoneTrack", trusted ? "cert accepted" : "cert rejected");
+                    runOnUiThread(() -> {
+                        if (trusted) {
+                            handler.proceed();
+                        } else {
+                            handler.cancel();
+                        }
+                    });
+                }).start();
             }
 
         });
