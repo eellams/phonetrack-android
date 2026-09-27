@@ -673,10 +673,8 @@ public class MapActivity extends AppCompatActivity {
         itemsMenu.add(itemLastMin);
 
         // If the platform supports pinned shortcuts, show menu item
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-            if (ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
-                itemsMenu.add(itemPin);
-            }
+        if (ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            itemsMenu.add(itemPin);
         }
 
         NavigationAdapter adapterMenu = new NavigationAdapter(new NavigationAdapter.ClickListener() {
@@ -770,33 +768,29 @@ public class MapActivity extends AppCompatActivity {
                     fromUrlDialog.show();
                     KeyboardUtil.showForDialog(fromUrlDialog, frequencyEdit);
                 } else if (item == itemPin) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                    if (ShortcutManagerCompat.isRequestPinShortcutSupported(getApplicationContext())) {
+                        long sessionId = getIntent().getLongExtra(PARAM_SESSIONID, 0);
 
-                        if (ShortcutManagerCompat.isRequestPinShortcutSupported(getApplicationContext())) {
-                            long sessionId = getIntent().getLongExtra(PARAM_SESSIONID, 0);
+                        // Main app intent
+                        Intent mainIntent = new Intent(getApplicationContext(), LogjobsListViewActivity.class);
+                        mainIntent.setAction(Intent.ACTION_VIEW);
 
-                            // Main app intent
-                            Intent mainIntent = new Intent(getApplicationContext(), LogjobsListViewActivity.class);
-                            mainIntent.setAction(Intent.ACTION_VIEW);
+                        // Map intent
+                        Intent mapIntent = new Intent(getApplicationContext(), MapActivity.class);
+                        mapIntent.setAction(Intent.ACTION_VIEW);
+                        // Add session id
+                        mapIntent.putExtra(PARAM_SESSIONID, sessionId);
 
-                            // Map intent
-                            Intent mapIntent = new Intent(getApplicationContext(), MapActivity.class);
-                            mapIntent.setAction(Intent.ACTION_VIEW);
-                            // Add session id
-                            mapIntent.putExtra(PARAM_SESSIONID, sessionId);
+                        // Build shortcut
+                        ShortcutInfoCompat pinShortcutInfo = new ShortcutInfoCompat.Builder(MapActivity.this, "map" + sessionId)
+                                .setShortLabel(session.getName())
+                                .setLongLabel(getString(R.string.homescreen_map_shortcut_long_title, session.getName()))
+                                .setIcon(IconCompat.createWithResource(MapActivity.this, R.drawable.ic_map_grey_24dp))
+                                .setIntents(new Intent[]{mainIntent, mapIntent})
+                                .build();
 
-                            // Build shortcut
-                            ShortcutInfoCompat pinShortcutInfo = new ShortcutInfoCompat.Builder(MapActivity.this, "map" + sessionId)
-                                    .setShortLabel(session.getName())
-                                    .setLongLabel(getString(R.string.homescreen_map_shortcut_long_title, session.getName()))
-                                    .setIcon(IconCompat.createWithResource(MapActivity.this, R.drawable.ic_map_grey_24dp))
-                                    .setIntents(new Intent[]{mainIntent, mapIntent})
-                                    .build();
-
-                            // Request to launcher to pin shortcut
-                            ShortcutManagerCompat.requestPinShortcut(getApplicationContext(), pinShortcutInfo, null);
-                        }
-
+                        // Request to launcher to pin shortcut
+                        ShortcutManagerCompat.requestPinShortcut(getApplicationContext(), pinShortcutInfo, null);
                     }
                 }
             }

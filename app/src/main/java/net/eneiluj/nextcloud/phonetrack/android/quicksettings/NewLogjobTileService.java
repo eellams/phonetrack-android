@@ -1,9 +1,7 @@
 package net.eneiluj.nextcloud.phonetrack.android.quicksettings;
 
-import android.annotation.TargetApi;
 import android.app.PendingIntent;
 import android.content.Intent;
-import android.os.Build;
 import android.service.quicksettings.Tile;
 import android.service.quicksettings.TileService;
 
@@ -15,7 +13,6 @@ import net.eneiluj.nextcloud.phonetrack.android.activity.EditPhoneTrackLogjobAct
 /**
  * This {@link TileService} adds a quick settings tile that leads to the new logjob view.
  */
-@TargetApi(Build.VERSION_CODES.N)
 public class NewLogjobTileService extends TileService {
 
     @Override

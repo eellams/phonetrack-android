@@ -1,12 +1,10 @@
 package net.eneiluj.nextcloud.phonetrack.util;
 
 import android.Manifest;
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.os.Build;
 //import android.preference.PreferenceManager;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
@@ -44,14 +42,9 @@ import net.eneiluj.nextcloud.phonetrack.R;
  */
 public class SupportUtil {
 
-    /**
-     * SmsManager.getDefault() is deprecated since API 31 in favour of the system service.
-     */
+    /** The SmsManager system service (SmsManager.getDefault() is deprecated). */
     public static SmsManager getSmsManager(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            return context.getSystemService(SmsManager.class);
-        }
-        return SmsManager.getDefault();
+        return context.getSystemService(SmsManager.class);
     }
 
     /**
@@ -69,24 +62,17 @@ public class SupportUtil {
      */
     public static boolean hasBackgroundLocationPermission(Context context) {
         return hasForegroundLocationPermission(context)
-                && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-                    || ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED);
+                && ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     /**
-     * Creates a {@link Spanned} from a HTML string on all SDK versions.
+     * Creates a {@link Spanned} from a HTML string.
      *
      * @param source Source string with HTML markup
      * @return Spannable for using in a {@link TextView}
-     * @see Html#fromHtml(String)
-     * @see Html#fromHtml(String, int)
      */
     public static Spanned fromHtml(String source) {
-        if (Build.VERSION.SDK_INT >= 24) {
-            return Html.fromHtml(source, Html.FROM_HTML_MODE_LEGACY);
-        } else {
-            return Html.fromHtml(source);
-        }
+        return Html.fromHtml(source, Html.FROM_HTML_MODE_LEGACY);
     }
 
     /**

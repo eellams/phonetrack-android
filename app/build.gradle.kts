@@ -20,7 +20,9 @@ android {
         // this fork's own ID (the original app is net.eneiluj.nextcloud.phonetrack): both can be
         // installed side by side. Never change it again: an app with another ID is another app.
         applicationId = "io.github.lazzurs.phonetrack"
-        minSdk = 26
+        // Oldest Android version still in Google's monthly security bulletin (Android 14, see
+        // RELEASING.md). Raise it when that version drops out of the bulletin.
+        minSdk = 34
         targetSdk = 36
         // from gradle.properties, the single source of the version (see RELEASING.md)
         versionCode = providers.gradleProperty("appVersionCode").get().toInt()

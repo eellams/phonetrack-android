@@ -11,7 +11,6 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -33,13 +32,11 @@ import androidx.preference.Preference;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputLayout;
 import androidx.annotation.Nullable;
-import androidx.core.view.MenuItemCompat;
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.RecyclerView;
-import androidx.appcompat.widget.ShareActionProvider;
 
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -583,12 +580,7 @@ public abstract class EditLogjobFragment extends Fragment {
             shareIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, getTitle());
             shareIntent.putExtra(android.content.Intent.EXTRA_TEXT, getURL());
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                startActivity(Intent.createChooser(shareIntent, logjob.getTitle()));
-            } else {
-                ShareActionProvider actionProvider = (ShareActionProvider) MenuItemCompat.getActionProvider(item);
-                actionProvider.setShareIntent(shareIntent);
-            }
+            startActivity(Intent.createChooser(shareIntent, logjob.getTitle()));
 
             return false;
         }
@@ -834,17 +826,13 @@ public abstract class EditLogjobFragment extends Fragment {
         if (sigMotionEnabled && useInterval && mixedMode) {
             minTimeTextInputLayout.setHint(getString(R.string.setting_min_time_mixed) + minTimeValidInterval);
             editUseSignificantMotionIntervalLayout.setVisibility(View.GONE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                editMintime.setTooltipText(getString(R.string.setting_min_time_mixed_long));
-                editMinTimeSummary.setText(getString(R.string.setting_min_time_mixed_long));
-            }
+            editMintime.setTooltipText(getString(R.string.setting_min_time_mixed_long));
+            editMinTimeSummary.setText(getString(R.string.setting_min_time_mixed_long));
         }
         else {
             minTimeTextInputLayout.setHint(getString(R.string.setting_min_time) + minTimeValidInterval);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                editMintime.setTooltipText(getString(R.string.setting_min_time_long));
-                editMinTimeSummary.setText(getString(R.string.setting_min_time_long));
-            }
+            editMintime.setTooltipText(getString(R.string.setting_min_time_long));
+            editMinTimeSummary.setText(getString(R.string.setting_min_time_long));
         }
     }
 

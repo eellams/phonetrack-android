@@ -20,7 +20,6 @@ import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -334,8 +333,7 @@ public class LogjobsListViewActivity extends AppCompatActivity implements ItemAd
 
         if (!notificationPermissionAsked) {
             notificationPermissionAsked = true;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                    && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
                 if (LoggerService.DEBUG) { SystemLogger.d(TAG, "requesting POST_NOTIFICATIONS permission"); }
                 permissionLauncher.launch(new String[]{Manifest.permission.POST_NOTIFICATIONS});
@@ -348,9 +346,7 @@ public class LogjobsListViewActivity extends AppCompatActivity implements ItemAd
             // background location can only be granted on top of foreground location
             if (SupportUtil.hasForegroundLocationPermission(this)
                     && !SupportUtil.hasBackgroundLocationPermission(this)) {
-                CharSequence optionLabel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-                        ? getPackageManager().getBackgroundPermissionOptionLabel()
-                        : "";
+                CharSequence optionLabel = getPackageManager().getBackgroundPermissionOptionLabel();
                 new AlertDialog.Builder(new ContextThemeWrapper(this, R.style.AppThemeDialog))
                         .setTitle(R.string.background_location_permission_title)
                         .setMessage(getString(R.string.background_location_permission_message) + "\n\n" + optionLabel)
@@ -1294,9 +1290,7 @@ public class LogjobsListViewActivity extends AppCompatActivity implements ItemAd
             DBLogjob logjob = db.getLogjob(logjobItem.getId());
 
             PopupMenu popup = new PopupMenu(this, view);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                popup.setForceShowIcon(true);
-            }
+            popup.setForceShowIcon(true);
 
             popup.getMenuInflater()
                     .inflate(R.menu.logjob_popup_menu, popup.getMenu());

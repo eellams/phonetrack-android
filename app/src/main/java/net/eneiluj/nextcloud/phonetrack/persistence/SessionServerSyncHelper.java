@@ -1,6 +1,5 @@
 package net.eneiluj.nextcloud.phonetrack.persistence;
 
-import android.annotation.TargetApi;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -12,7 +11,6 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.net.NetworkRequest;
-import android.os.Build;
 import android.os.IBinder;
 
 import androidx.annotation.NonNull;
@@ -165,7 +163,6 @@ public class SessionServerSyncHelper {
                 preferences.getBoolean(SettingsActivity.SETTINGS_USE_SSO, false);
     }
 
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private class ConnectionStateMonitor extends ConnectivityManager.NetworkCallback {
 
         final NetworkRequest networkRequest;

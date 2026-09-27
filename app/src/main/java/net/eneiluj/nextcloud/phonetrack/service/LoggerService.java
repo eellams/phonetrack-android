@@ -10,7 +10,6 @@
 package net.eneiluj.nextcloud.phonetrack.service;
 
 import android.Manifest;
-import android.annotation.TargetApi;
 import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -36,7 +35,6 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.os.BatteryManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -47,7 +45,6 @@ import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
-import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.AlarmManagerCompat;
@@ -407,10 +404,7 @@ public class LoggerService extends Service {
         boolean hasLocPermissions = (
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                && (
-                        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-                        || ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
-                )
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
         );
 
         return (!respectPowerSaveMode || !isPowerSaveMode)
@@ -748,9 +742,7 @@ public class LoggerService extends Service {
         }
 
         final String channelId = String.valueOf(mId);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            createNotificationChannel(channelId, lowImportance);
-        }
+        createNotificationChannel(channelId, lowImportance);
         String nbLocations = String.valueOf(db.getLocationNotSyncedCount());
         String nbSent = String.valueOf(db.getNbTotalSync());
         NotificationCompat.Builder mBuilder =
@@ -764,9 +756,6 @@ public class LoggerService extends Service {
                         //.setSmallIcon(R.drawable.ic_stat_notify_24dp)
                         //.setContentText(String.format(getString(R.string.is_running), getString(R.string.app_name)));
         mNotificationBuilder = mBuilder;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            mBuilder.setChannelId(channelId);
-        }
 
         Intent resultIntent = new Intent(this, LogjobsListViewActivity.class);
 
@@ -787,7 +776,6 @@ public class LoggerService extends Service {
         mNotificationManager.notify(this.NOTIFICATION_ID, mNotificationBuilder.build());
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private void createNotificationChannel(String channelId, boolean lowImportance) {
         int importance = NotificationManager.IMPORTANCE_LOW;
         if (lowImportance) {
@@ -1007,7 +995,6 @@ public class LoggerService extends Service {
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private class ConnectionStateMonitor extends ConnectivityManager.NetworkCallback {
 
         final NetworkRequest networkRequest;

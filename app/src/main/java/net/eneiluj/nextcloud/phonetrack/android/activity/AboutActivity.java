@@ -2,7 +2,6 @@ package net.eneiluj.nextcloud.phonetrack.android.activity;
 
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
-import android.os.Build;
 import android.os.Bundle;
 import com.google.android.material.tabs.TabLayout;
 //import android.support.v4.app.Fragment;
