@@ -9,7 +9,7 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
 {% for commit in commits %}
-- {{ commit.message | split(pat="\n") | first | trim | upper_first }} \
+- {% if commit.breaking %}**Breaking:** {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }} \
 ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/lazzurs/phonetrack-android/commit/{{ commit.id }}))\
 {% endfor %}
 {% endfor %}
@@ -31,8 +31,9 @@ sort_commits = "oldest"
 filter_commits = false
 commit_parsers = [
     { message = "^Merge ", skip = true },
-    # the automatic CHANGELOG.md update of each release
+    # the automatic CHANGELOG.md update of each release, and the version bump before it
     { message = "^docs\\(changelog\\)", skip = true },
+    { message = "^build: release [0-9]", skip = true },
     { message = "^debug", skip = true },
     { message = "^test", skip = true },
     { message = "^style", skip = true },
