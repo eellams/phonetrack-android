@@ -28,8 +28,8 @@ import java.util.Locale;
  * ACCESS_LOCAL_NETWORK (in the "Nearby devices" group). Self-hosted Nextcloud / PhoneTrack
  * servers are often on the LAN, so ask for it when a configured server is local.
  *
- * Dormant until targetSdk is raised to 37: before that nothing is enforced and nobody
- * should see an extra prompt.
+ * Enforced on Android 17+ now that the app targets it (API 37); older Android versions don't
+ * have the restriction, so nobody there sees the prompt.
  */
 public final class LocalNetworkAccess {
 

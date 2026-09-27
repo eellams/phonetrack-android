@@ -55,7 +55,7 @@ still gets security updates**, i.e. the oldest one in the "Updated AOSP versions
 are dropped, unless that would break a critical feature. Check it at each release.
 
 - 2026-09: the bulletin covers Android 14, 15, 16 and 17 → `minSdk 34` (Android 14).
-- `targetSdk` is the newest Android version (currently 36; 37 is tracked in #23).
+- `targetSdk` is the newest Android version (currently 37, Android 17).
 
 ## Steps
 
