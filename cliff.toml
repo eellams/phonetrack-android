@@ -46,7 +46,7 @@ commit_parsers = [
     { message = "^docs", group = "<!-- 5 -->Documentation" },
 ]
 
-# Next version for the "Prepare release" workflow (git-cliff --bumped-version): a breaking change
+# Next version, for the release workflow (git-cliff --bumped-version): a breaking change
 # (type!: or BREAKING CHANGE:) bumps the major version, feat: the minor, anything else the patch.
 # While the version is 0.x a breaking change bumps the minor instead (SemVer: 0.x may break).
 [bump]

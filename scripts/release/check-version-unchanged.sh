@@ -2,7 +2,7 @@
 # Fails if the branch changes the app version (appVersionName / appVersionCode in
 # gradle.properties) since BASE. Merging a new version to main publishes a release
 # (.github/workflows/release.yml), so CI runs this on pull requests from other repositories:
-# only the "Prepare release" workflow and maintainers set the version.
+# only maintainers and the release workflow set the version.
 #
 #   scripts/release/check-version-unchanged.sh origin/main
 set -euo pipefail

@@ -35,8 +35,8 @@ or `fix(security): only accept SMS from allowed senders`. CI checks it; the type
 process are in [RELEASING.md](RELEASING.md).
 
 Please don't change the app version (`appVersionName` / `appVersionCode` in `gradle.properties`) in a
-pull request: merging a new version publishes a release, so CI rejects that from forks. Releases are
-prepared by the maintainers.
+pull request: the release workflow sets it when your change is released, and CI rejects version
+changes from forks.
 
 ## Adding new features
 

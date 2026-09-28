@@ -10,7 +10,8 @@
 #     of this same version)
 #   - there is something to release: Conventional Commits since the previous full release
 # Writes to OUT_DIR (default: release-out):
-#   RELEASE_NOTES.md   .github/release-highlights/X.Y.Z.md if it exists (hand-written, optional),
+#   RELEASE_NOTES.md   .github/release-highlights/X.Y.Z.md if it exists, else next.md there, which the
+#                      release workflow renames to X.Y.Z.md (hand-written, optional),
 #                      then the notes git-cliff generates from the commit messages (cliff.toml)
 #   CHANGELOG_ENTRY.md the same under a "## [X.Y.Z] – date" heading, for CHANGELOG.md
 # Prints key=value lines (also appended to $GITHUB_OUTPUT when set): version, tag, prerelease,
@@ -83,6 +84,7 @@ generated=$(git-cliff --config cliff.toml "$range" --tag "$tag" --strip all 2>/d
     || fail "no Conventional Commits (feat:, fix:, ...) since ${previous_release:-the first commit}: nothing to release"
 
 highlights_file=.github/release-highlights/$base.md
+[[ -e $highlights_file ]] || highlights_file=.github/release-highlights/next.md
 mkdir -p "$out_dir"
 {
     if [[ -s $highlights_file ]]; then
