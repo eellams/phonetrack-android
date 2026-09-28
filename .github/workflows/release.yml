@@ -1,11 +1,13 @@
 name: Release
 
-# Publishes a release (see RELEASING.md):
-#   - push to main: when appVersionName in gradle.properties has no vX.Y.Z tag yet, i.e. a release
-#     pull request (opened by prepare-release.yml) was merged, tags the merge commit and publishes it
+# Publishes releases automatically (see RELEASING.md):
+#   - push to main: if there are user-facing commits since the previous release (feat:, fix:, ...,
+#     scripts/release/releasable.sh), computes the next version from them, commits
+#     "build: release X.Y.Z" (gradle.properties + CHANGELOG.md) on top, tags it and publishes it.
+#     A version set by hand in gradle.properties that has no tag yet is released as it is.
 #   - push of a v* tag: publishes that tag (vX.Y.Z = full release, vX.Y.Z-suffix = pre-release)
-#   - run manually: dry run, everything is built and checked and the would-be release (notes,
-#     signed APKs, checksums) is uploaded as a workflow artifact instead
+#   - run manually: dry run of what a push to main would release (or of the current version),
+#     uploaded as a workflow artifact (notes, signed APKs, checksums) instead
 # Nothing here runs for pull requests, so code from other repositories never gets the signing key.
 on:
   push:
@@ -29,11 +31,18 @@ jobs:
       build: ${{ steps.plan.outputs.build }}
       publish: ${{ steps.plan.outputs.publish }}
       tag: ${{ steps.plan.outputs.tag }}
+      bump: ${{ steps.plan.outputs.bump }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          # all tags: the next version comes from the commits since the previous release
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Install git-cliff
+        # computes the next version from the commit messages ([bump] in cliff.toml)
+        run: pipx install git-cliff==2.14.2
 
       - name: Decide
         id: plan
@@ -42,23 +51,30 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          build=true publish=false tag=
-          if [[ $EVENT == workflow_dispatch ]]; then
-            echo "Dry run of the version in gradle.properties"
-          elif [[ $REF_TYPE == tag ]]; then
+          build=true publish=false tag='' bump=''
+          if [[ $REF_TYPE == tag ]]; then
             publish=true tag=$REF_NAME
           else
             version=$(grep -E '^appVersionName=' gradle.properties | tail -1 | cut -d= -f2 | tr -d '[:space:]')
-            tag=v$version
-            rc=0
-            git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || rc=$?
-            case $rc in
-              0) echo "$tag is already released: nothing to publish"; build=false tag= ;;
-              2) echo "$tag is not released yet: publishing it from $GITHUB_SHA"; publish=true ;;
-              *) echo "::error::could not list the tags of origin (git ls-remote exit code $rc)"; exit 1 ;;
-            esac
+            if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "v$version (set in gradle.properties) is not released yet"
+              tag=v$version
+            elif scripts/release/releasable.sh; then
+              next=$(git-cliff --config cliff.toml --bumped-version 2>/dev/null)
+              tag=v${next#v} bump=${next#v}
+              echo "next version: $bump"
+            else
+              echo "nothing to release"
+            fi
+            if [[ $EVENT == workflow_dispatch ]]; then
+              echo "dry run of ${tag:-the current version $version}"
+            elif [[ -n $tag ]]; then
+              publish=true
+            else
+              build=false
+            fi
           fi
-          printf 'build=%s\npublish=%s\ntag=%s\n' "$build" "$publish" "$tag" | tee -a "$GITHUB_OUTPUT"
+          printf 'build=%s\npublish=%s\ntag=%s\nbump=%s\n' "$build" "$publish" "$tag" "$bump" | tee -a "$GITHUB_OUTPUT"
 
   build:
     name: Build signed APKs
@@ -82,9 +98,16 @@ jobs:
         # generates the release notes from the commit messages (cliff.toml)
         run: pipx install git-cliff==2.14.2
 
+      # the version is only committed by the publish job, after the build succeeded
+      - name: Set the next version
+        if: needs.plan.outputs.bump != ''
+        env:
+          VERSION: ${{ needs.plan.outputs.bump }}
+        run: scripts/release/bump.sh "$VERSION"
+
       - name: Check version and write release notes
         id: meta
-        # a dry run (no tag) checks the release of the version in gradle.properties
+        # without a tag (dry run with nothing to release), checks the version in gradle.properties
         env:
           TAG: ${{ needs.plan.outputs.tag }}
         run: scripts/release/prepare.sh "$TAG" release-out
@@ -199,25 +222,56 @@ jobs:
           name: ${{ needs.build.outputs.artifact }}
           path: release-out
 
-      - name: Tag the release
-        # a tag pushed with the workflow's token starts no other workflow run, so this doesn't
-        # publish twice
+      - name: Commit the version and tag the release
+        id: tag
+        if: github.ref_type != 'tag'
+        env:
+          BUMP: ${{ needs.plan.outputs.bump }}
+        # the tag is on "build: release X.Y.Z", a child of the built commit that only adds the
+        # version, the CHANGELOG.md entry and names the highlights; pushed together, and with the workflow's token, which
+        # starts no other workflow run
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            tagged=$(git rev-parse "$TAG^{commit}")
-            if [[ $tagged != "$GITHUB_SHA" ]]; then
-              echo "::error::$TAG already exists on $tagged, not on $GITHUB_SHA"
+            # a re-run after the push
+            if [[ $(git rev-parse "$TAG^{commit}") != "$GITHUB_SHA" && $(git rev-parse "$TAG^{commit}~1") != "$GITHUB_SHA" ]]; then
+              echo "::error::$TAG already exists, not on $GITHUB_SHA or its release commit"
               exit 1
             fi
-            echo "$TAG already on $GITHUB_SHA"
+            echo "$TAG already pushed"
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -n $BUMP ]]; then
+            scripts/release/bump.sh "$BUMP"
+          fi
+          if [[ -e .github/release-highlights/next.md && ! -e .github/release-highlights/$VERSION.md ]]; then
+            git mv .github/release-highlights/next.md ".github/release-highlights/$VERSION.md"
+          fi
+          scripts/release/update-changelog.sh release-out/CHANGELOG_ENTRY.md
+          git add gradle.properties CHANGELOG.md
+          git commit -m "build: release $VERSION"
+          git tag -a "$TAG" -m "PhoneTrack $VERSION"
+          if git push --atomic origin HEAD:refs/heads/main "refs/tags/$TAG"; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
           else
-            git -c user.name="github-actions[bot]" \
-                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-                tag -a "$TAG" -m "PhoneTrack $VERSION" "$GITHUB_SHA"
-            git push origin "refs/tags/$TAG"
+            # main moved on while this ran: the run queued for that push releases it all
+            git fetch origin main
+            if [[ $(git rev-parse origin/main) == "$GITHUB_SHA" ]]; then
+              echo "::error::could not push the release commit and tag"
+              exit 1
+            fi
+            echo "::notice::main has new commits: the next Release run publishes them together with these"
           fi
 
+      - name: Tag the release (tag push)
+        if: github.ref_type == 'tag'
+        run: |
+          [[ $(git rev-parse "$TAG^{commit}") == "$GITHUB_SHA" ]] || { echo "::error::$TAG is not on $GITHUB_SHA"; exit 1; }
+
       - name: Create GitHub release
+        if: github.ref_type == 'tag' || steps.tag.outputs.pushed == 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.plan.outputs.tag }}
@@ -231,8 +285,9 @@ jobs:
             release-out/phonetrack-*-mapping.txt
             release-out/SHA256SUMS.txt
 
-      - name: Add the release to CHANGELOG.md on main
-        if: needs.build.outputs.prerelease == 'false'
+      # a tag pushed by hand: the release commit on main only gets the CHANGELOG.md entry
+      - name: Add the release to CHANGELOG.md on main (tag push)
+        if: github.ref_type == 'tag' && needs.build.outputs.prerelease == 'false'
         run: |
           git fetch origin main
           git switch --detach origin/main

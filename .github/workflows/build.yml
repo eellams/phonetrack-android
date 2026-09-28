@@ -30,7 +30,7 @@ jobs:
         run: scripts/release/check-commits.sh "origin/$BASE_REF"
 
       # merging a new version to main publishes a release (release.yml), so only the
-      # "Prepare release" workflow and maintainers change it, never a pull request from a fork
+      # release workflow and maintainers change it, never a pull request from a fork
       - name: Check the app version is unchanged (pull requests from other repositories)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         env:
