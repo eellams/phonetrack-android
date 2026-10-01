@@ -15,9 +15,15 @@ import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
+import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
+import net.eneiluj.nextcloud.phonetrack.util.AutomationEngine;
+import net.eneiluj.nextcloud.phonetrack.util.LogjobAutomation;
 import net.eneiluj.nextcloud.phonetrack.util.SystemLogger;
+import net.eneiluj.nextcloud.phonetrack.util.SupportUtil;
+import net.eneiluj.nextcloud.phonetrack.util.UploadScheduler;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -49,6 +55,11 @@ public class WebTrackWorker extends Worker {
      * At most one upload per logjob is queued: a queued one sends everything unsynced when it runs.
      */
     public static void enqueue(Context context, long logjobId) {
+        if (!mayUploadNow(context, logjobId)) {
+            // uploads not allowed right now: positions keep buffering and the
+            // next accepted position retries (or the manual sync does)
+            return;
+        }
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(WebTrackWorker.class)
                 .setConstraints(new Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -64,6 +75,61 @@ public class WebTrackWorker extends Worker {
     @VisibleForTesting
     static String uniqueName(long logjobId) {
         return logjobId == ALL_LOGJOBS ? "websync-all" : "websync-" + logjobId;
+    }
+
+    /**
+     * Whether uploads of this logjob (or of any logjob) may run right now:
+     * respects the logjob's upload policy and the failure retry gate.
+     */
+    @VisibleForTesting
+    static boolean mayUploadNow(Context context, long logjobId) {
+        PhoneTrackSQLiteOpenHelper db = PhoneTrackSQLiteOpenHelper.getInstance(context);
+        boolean unmetered = SupportUtil.isConnectedUnmetered(context);
+        UploadScheduler scheduler = new UploadScheduler(context,
+                new AutomationEngine.RealDeviceState(context), unmetered);
+        if (logjobId == ALL_LOGJOBS) {
+            List<DBLogjob> logjobs = db.getLogjobs();
+            if (logjobs.isEmpty()) {
+                return true;
+            }
+            for (DBLogjob logjob : logjobs) {
+                if (scheduler.mayUploadNow(logjob.getId(), logjob.getAutomation())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        DBLogjob logjob = db.getLogjob(logjobId);
+        if (logjob == null) {
+            return true;
+        }
+        return scheduler.mayUploadNow(logjobId, logjob.getAutomation());
+    }
+
+    /**
+     * Writes the failure gate for every logjob whose positions could not be
+     * uploaded, so the app stops hitting a server that is down until
+     * retryMinutes have passed (per-logjob setting, default: no gate).
+     */
+    private static void gateFailedLogjobs(Context context, WebTrackSync sync, long logjobId) {
+        PhoneTrackSQLiteOpenHelper db = PhoneTrackSQLiteOpenHelper.getInstance(context);
+        UploadScheduler scheduler = new UploadScheduler(context,
+                new AutomationEngine.RealDeviceState(context), true);
+        for (DBLogjob logjob : db.getLogjobs()) {
+            if (logjobId != ALL_LOGJOBS && logjob.getId() != logjobId) {
+                continue;
+            }
+            if (sync.getFailedLogjobIds().contains(logjob.getId())
+                    && logjob.getAutomation() != null
+                    && logjob.getAutomation().uploadPolicy != null
+                    && logjob.getAutomation().uploadPolicy.backoff != null
+                    && logjob.getAutomation().uploadPolicy.backoff.isSet()) {
+                LogjobAutomation.Backoff backoff = logjob.getAutomation().uploadPolicy.backoff;
+                scheduler.gateAfterFailure(logjob.getId(), backoff);
+                SystemLogger.w(TAG, "Upload of logjob " + logjob.getId() + " failed: retrying in "
+                        + backoff.minutesForAttempt(0) + "+ minutes (server considered down)");
+            }
+        }
     }
 
     @NonNull
@@ -86,14 +152,29 @@ public class WebTrackWorker extends Worker {
         refreshTrackingNotification(context);
 
         if (ok) {
+            clearGates(context, logjobId);
             return Result.success();
         }
+        gateFailedLogjobs(context, sync, logjobId);
         if (getRunAttemptCount() + 1 >= MAX_ATTEMPTS) {
             SystemLogger.w(TAG, "Upload of logjob " + logjobId + " still failing after "
                     + MAX_ATTEMPTS + " attempts, waiting for the next position");
             return Result.failure();
         }
         return Result.retry();
+    }
+
+    private static void clearGates(Context context, long logjobId) {
+        UploadScheduler scheduler = new UploadScheduler(context,
+                new AutomationEngine.RealDeviceState(context), true);
+        if (logjobId == ALL_LOGJOBS) {
+            PhoneTrackSQLiteOpenHelper db = PhoneTrackSQLiteOpenHelper.getInstance(context);
+            for (DBLogjob logjob : db.getLogjobs()) {
+                scheduler.clearGate(logjob.getId());
+            }
+        } else {
+            scheduler.clearGate(logjobId);
+        }
     }
 
     private static int unsyncedCount(PhoneTrackSQLiteOpenHelper db, long logjobId) {

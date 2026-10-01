@@ -159,8 +159,34 @@
     <string name="syslog_saved_success">Activity log exported in %s</string>
     <string name="delete_logjob_menu_title">Delete logjob</string>
     <string name="manage_accounts">Manage accounts</string>
-
-    <string name="is_running">running (%1$s pending, %2$s sent)</string>
+    <string name="automation_title">Pause this log job automatically</string>
+    <string name="automation_pause_between_times">Pause between times (every day)</string>
+    <string name="automation_start_time">Start time (HH:MM)</string>
+    <string name="automation_end_time">End time (HH:MM)</string>
+    <string name="automation_pause_on_wifi">Pause while connected to Wi-Fi</string>
+    <string name="automation_wifi_ssids_hint">Wi-Fi names (SSIDs), comma separated</string>
+    <string name="automation_pause_at_location">Pause at a location</string>
+    <string name="automation_latitude">Latitude</string>
+    <string name="automation_longitude">Longitude</string>
+    <string name="automation_radius_m">Radius (m)</string>
+    <string name="automation_invalid_time">Enter a time as HH:MM</string>
+    <string name="automation_low_power_title">Use these settings in battery saver mode</string>
+    <string name="automation_low_power_summary">Slower sampling while the device is in battery saver mode</string>
+    <string name="automation_low_power_min_time">Interval (s), empty = keep normal</string>
+    <string name="automation_low_power_min_distance">Min distance (m), empty = keep normal</string>
+    <string name="upload_policy_title">Upload policy</string>
+    <string name="upload_policy_summary">Restrict when buffered positions are uploaded; they keep waiting on the phone until then</string>
+    <string name="upload_policy_enabled_title">Restrict uploads of this log job</string>
+    <string name="upload_policy_ssids_hint">Only upload on Wi-Fi names (SSIDs), comma separated; empty = any network</string>
+    <string name="upload_policy_unmetered_title">Only upload on unmetered networks (Wi-Fi/Ethernet)</string>
+    <string name="upload_policy_time_window_title">Only upload between times (every day)</string>
+    <string name="upload_policy_backoff_title">After a failed upload, retry:</string>
+    <string name="upload_policy_backoff_fixed">At a fixed interval (jump straight to every N minutes)</string>
+    <string name="upload_policy_backoff_exponential">Exponentially (interval doubles after each failure)</string>
+    <string name="upload_policy_backoff_base_hint">Interval (minutes), empty = normal retry</string>
+    <string name="upload_policy_backoff_max_hint">Max interval (minutes), empty = no cap</string>
+    <string name="automation_paused_notification">%1$d paused by automation</string>
+<string name="is_running">running (%1$s pending, %2$s sent)</string>
 
     <!-- Settings -->
     <string name="settings_server_settings">Account</string>

@@ -2,6 +2,8 @@ package net.eneiluj.nextcloud.phonetrack.model;
 
 import androidx.annotation.Nullable;
 
+import net.eneiluj.nextcloud.phonetrack.util.LogjobAutomation;
+
 import java.io.Serializable;
 
 /**
@@ -27,6 +29,7 @@ public class DBLogjob implements Item, Serializable {
     private int locationRequestTimeout;
     private String login;
     private String password;
+    private LogjobAutomation automation;
 
     public DBLogjob(long id, String title, String url, String token, String deviceName,
                     int minTime, int minDistance, int minAccuracy, boolean keepGpsOnBetweenFixes,
@@ -75,6 +78,15 @@ public class DBLogjob implements Item, Serializable {
 
     public String getPassword() {
         return password;
+    }
+
+    @Nullable
+    public LogjobAutomation getAutomation() {
+        return automation;
+    }
+
+    public void setAutomation(@Nullable LogjobAutomation automation) {
+        this.automation = automation;
     }
 
     public void setPassword(String password) {

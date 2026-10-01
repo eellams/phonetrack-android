@@ -54,6 +54,8 @@ import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Toast;
 
 //import butterknife.ButterKnife;
@@ -64,6 +66,7 @@ import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
 import net.eneiluj.nextcloud.phonetrack.service.LoggerService;
 import net.eneiluj.nextcloud.phonetrack.util.KeyboardUtil;
+import net.eneiluj.nextcloud.phonetrack.util.LogjobAutomation;
 import net.eneiluj.nextcloud.phonetrack.util.ICallback;
 import net.eneiluj.nextcloud.phonetrack.util.PhoneTrack;
 import net.eneiluj.nextcloud.phonetrack.util.ThemeUtils;
@@ -118,6 +121,35 @@ public abstract class EditLogjobFragment extends Fragment {
     protected CheckBox editUseSignificantMotionInterval;
     protected CheckBox editUseSignificantMotionMixed;
     protected EditText editLocationRequestTimeout;
+
+    protected CheckBox automationTimeWindowEnabled;
+    protected LinearLayout automationTimeWindowFields;
+    protected EditText automationStartTime;
+    protected EditText automationEndTime;
+    protected CheckBox automationWifiEnabled;
+    protected EditText automationWifiSsids;
+    protected CheckBox automationFenceEnabled;
+    protected LinearLayout automationFenceFields;
+    protected EditText automationLatitude;
+    protected EditText automationLongitude;
+    protected EditText automationRadius;
+    protected CheckBox automationLowPowerEnabled;
+    protected LinearLayout automationLowPowerFields;
+    protected EditText automationLowPowerMinTime;
+    protected EditText automationLowPowerMinDistance;
+    protected CheckBox uploadPolicyEnabled;
+    protected LinearLayout uploadPolicyFields;
+    protected EditText uploadPolicySsids;
+    protected CheckBox uploadPolicyUnmeteredOnly;
+    protected CheckBox uploadPolicyTimeWindowEnabled;
+    protected LinearLayout uploadPolicyTimeWindowFields;
+    protected EditText uploadPolicyStartTime;
+    protected EditText uploadPolicyEndTime;
+    protected RadioGroup uploadPolicyBackoffStrategy;
+    protected RadioButton uploadPolicyBackoffFixed;
+    protected RadioButton uploadPolicyBackoffExponential;
+    protected EditText uploadPolicyBackoffBase;
+    protected EditText uploadPolicyBackoffMax;
 
     protected LinearLayout editUseSignificantMotionLayout;
     protected LinearLayout editUseSignificantMotionIntervalLayout;
@@ -251,6 +283,108 @@ public abstract class EditLogjobFragment extends Fragment {
 
         String timeoutVal = String.valueOf(logjob.getLocationRequestTimeout());
         editLocationRequestTimeout.setText(timeoutVal);
+
+        automationTimeWindowEnabled = view.findViewById(R.id.automationTimeWindowEnabled);
+        automationTimeWindowFields = view.findViewById(R.id.automationTimeWindowFields);
+        automationStartTime = view.findViewById(R.id.automationStartTime);
+        automationEndTime = view.findViewById(R.id.automationEndTime);
+        automationWifiEnabled = view.findViewById(R.id.automationWifiEnabled);
+        automationWifiSsids = view.findViewById(R.id.automationWifiSsids);
+        automationFenceEnabled = view.findViewById(R.id.automationFenceEnabled);
+        automationFenceFields = view.findViewById(R.id.automationFenceFields);
+        automationLatitude = view.findViewById(R.id.automationLatitude);
+        automationLongitude = view.findViewById(R.id.automationLongitude);
+        automationRadius = view.findViewById(R.id.automationRadius);
+        LogjobAutomation automation = logjob.getAutomation();
+        if (automation != null) {
+            if (automation.timeWindow != null) {
+                automationTimeWindowEnabled.setChecked(true);
+                automationTimeWindowFields.setVisibility(View.VISIBLE);
+                automationStartTime.setText(LogjobAutomation.formatHhMm(automation.timeWindow.startMinutes));
+                automationEndTime.setText(LogjobAutomation.formatHhMm(automation.timeWindow.endMinutes));
+            }
+            if (!automation.wifiSsids.isEmpty()) {
+                automationWifiEnabled.setChecked(true);
+                automationWifiSsids.setVisibility(View.VISIBLE);
+                automationWifiSsids.setText(android.text.TextUtils.join(", ", automation.wifiSsids));
+            }
+            if (automation.fence != null) {
+                automationFenceEnabled.setChecked(true);
+                automationFenceFields.setVisibility(View.VISIBLE);
+                automationLatitude.setText(String.valueOf(automation.fence.latitude));
+                automationLongitude.setText(String.valueOf(automation.fence.longitude));
+                automationRadius.setText(String.valueOf(automation.fence.radius));
+            }
+        }
+        automationTimeWindowEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationTimeWindowFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        automationWifiEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationWifiSsids.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        automationFenceEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationFenceFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        automationLowPowerEnabled = view.findViewById(R.id.automationLowPowerEnabled);
+        automationLowPowerFields = view.findViewById(R.id.automationLowPowerFields);
+        automationLowPowerMinTime = view.findViewById(R.id.automationLowPowerMinTime);
+        automationLowPowerMinDistance = view.findViewById(R.id.automationLowPowerMinDistance);
+        if (automation != null && automation.lowPower != null && !automation.lowPower.isDefault()) {
+            automationLowPowerEnabled.setChecked(true);
+            automationLowPowerFields.setVisibility(View.VISIBLE);
+            if (automation.lowPower.minTime >= 0) {
+                automationLowPowerMinTime.setText(String.valueOf(automation.lowPower.minTime));
+            }
+            if (automation.lowPower.minDistance >= 0) {
+                automationLowPowerMinDistance.setText(String.valueOf(automation.lowPower.minDistance));
+            }
+        }
+        automationLowPowerEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationLowPowerFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        uploadPolicyEnabled = view.findViewById(R.id.uploadPolicyEnabled);
+        uploadPolicyFields = view.findViewById(R.id.uploadPolicyFields);
+        uploadPolicySsids = view.findViewById(R.id.uploadPolicySsids);
+        uploadPolicyUnmeteredOnly = view.findViewById(R.id.uploadPolicyUnmeteredOnly);
+        uploadPolicyTimeWindowEnabled = view.findViewById(R.id.uploadPolicyTimeWindowEnabled);
+        uploadPolicyTimeWindowFields = view.findViewById(R.id.uploadPolicyTimeWindowFields);
+        uploadPolicyStartTime = view.findViewById(R.id.uploadPolicyStartTime);
+        uploadPolicyEndTime = view.findViewById(R.id.uploadPolicyEndTime);
+        uploadPolicyBackoffStrategy = view.findViewById(R.id.uploadPolicyBackoffStrategy);
+        uploadPolicyBackoffFixed = view.findViewById(R.id.uploadPolicyBackoffFixed);
+        uploadPolicyBackoffExponential = view.findViewById(R.id.uploadPolicyBackoffExponential);
+        uploadPolicyBackoffBase = view.findViewById(R.id.uploadPolicyBackoffBase);
+        uploadPolicyBackoffMax = view.findViewById(R.id.uploadPolicyBackoffMax);
+        if (automation != null && automation.uploadPolicy != null
+                && automation.uploadPolicy.hasAnyRestriction()) {
+            LogjobAutomation.UploadPolicy policy = automation.uploadPolicy;
+            uploadPolicyEnabled.setChecked(true);
+            uploadPolicyFields.setVisibility(View.VISIBLE);
+            if (!policy.ssids.isEmpty()) {
+                uploadPolicySsids.setText(android.text.TextUtils.join(", ", policy.ssids));
+            }
+            uploadPolicyUnmeteredOnly.setChecked(policy.unmeteredOnly);
+            if (policy.timeWindow != null) {
+                uploadPolicyTimeWindowEnabled.setChecked(true);
+                uploadPolicyTimeWindowFields.setVisibility(View.VISIBLE);
+                uploadPolicyStartTime.setText(LogjobAutomation.formatHhMm(policy.timeWindow.startMinutes));
+                uploadPolicyEndTime.setText(LogjobAutomation.formatHhMm(policy.timeWindow.endMinutes));
+            }
+        }
+        if (automation != null && automation.uploadPolicy != null
+                && automation.uploadPolicy.backoff != null
+                && automation.uploadPolicy.backoff.isSet()) {
+            LogjobAutomation.Backoff backoff = automation.uploadPolicy.backoff;
+            if (backoff.strategy == LogjobAutomation.Backoff.EXPONENTIAL) {
+                uploadPolicyBackoffExponential.setChecked(true);
+            } else {
+                uploadPolicyBackoffFixed.setChecked(true);
+            }
+            uploadPolicyBackoffBase.setText(String.valueOf(backoff.baseMinutes));
+            if (backoff.maxMinutes > 0) {
+                uploadPolicyBackoffMax.setText(String.valueOf(backoff.maxMinutes));
+            }
+        }
+        uploadPolicyEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                uploadPolicyFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        uploadPolicyTimeWindowEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                uploadPolicyTimeWindowFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
         // Setup significant motion option, only show if device supports it
         if (deviceSupportsSignificantMotion()) {
             editUseSignificantMotion.setChecked(logjob.useSignificantMotion());
@@ -796,6 +930,140 @@ public abstract class EditLogjobFragment extends Fragment {
         catch (Exception e) {
             return 60;
         }
+    }
+
+    /**
+     * Builds the automation conditions from the form, or null when nothing is set.
+     * Invalid input (bad time format, unparsable numbers) means the condition
+     * is dropped, so a typo cannot silently pause a log job forever.
+     */
+    @Nullable
+    protected LogjobAutomation buildAutomationFromForm() {
+        LogjobAutomation.TimeWindow timeWindow = null;
+        if (automationTimeWindowEnabled.isChecked()) {
+            int start = LogjobAutomation.parseHhMm(automationStartTime.getText().toString());
+            int end = LogjobAutomation.parseHhMm(automationEndTime.getText().toString());
+            if (start >= 0 && end >= 0) {
+                timeWindow = new LogjobAutomation.TimeWindow(start, end);
+            } else {
+                showToast(getString(R.string.automation_invalid_time), Toast.LENGTH_SHORT);
+            }
+        }
+        List<String> ssids = new ArrayList<>();
+        if (automationWifiEnabled.isChecked() && automationWifiSsids.getText() != null) {
+            for (String ssid : automationWifiSsids.getText().toString().split(",")) {
+                String trimmed = ssid.trim();
+                if (!trimmed.isEmpty()) {
+                    ssids.add(trimmed);
+                }
+            }
+        }
+        LogjobAutomation.Fence fence = null;
+        if (automationFenceEnabled.isChecked()) {
+            try {
+                double lat = Double.parseDouble(automationLatitude.getText().toString());
+                double lon = Double.parseDouble(automationLongitude.getText().toString());
+                int radius = Integer.parseInt(automationRadius.getText().toString());
+                if (radius > 0) {
+                    fence = new LogjobAutomation.Fence(lat, lon, radius);
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        LogjobAutomation.LowPower lowPower = null;
+        if (automationLowPowerEnabled.isChecked()) {
+            int lowPowerMinTime = -1;
+            int lowPowerMinDistance = -1;
+            try {
+                if (automationLowPowerMinTime.getText() != null
+                        && !automationLowPowerMinTime.getText().toString().trim().isEmpty()) {
+                    lowPowerMinTime = Integer.parseInt(automationLowPowerMinTime.getText().toString().trim());
+                }
+            } catch (NumberFormatException ignored) {
+            }
+            try {
+                if (automationLowPowerMinDistance.getText() != null
+                        && !automationLowPowerMinDistance.getText().toString().trim().isEmpty()) {
+                    lowPowerMinDistance = Integer.parseInt(automationLowPowerMinDistance.getText().toString().trim());
+                }
+            } catch (NumberFormatException ignored) {
+            }
+            if (lowPowerMinTime >= 0 || lowPowerMinDistance >= 0) {
+                lowPower = new LogjobAutomation.LowPower(lowPowerMinTime, lowPowerMinDistance);
+            }
+        }
+        LogjobAutomation.UploadPolicy uploadPolicy = buildUploadPolicyFromForm();
+        if (timeWindow == null && ssids.isEmpty() && fence == null && lowPower == null
+                && uploadPolicy == null) {
+            return null;
+        }
+        return new LogjobAutomation(timeWindow, ssids, fence, lowPower, uploadPolicy);
+    }
+
+    /**
+     * Upload restrictions from the form: null when the section is off and no
+     * retry interval is set (unrestricted uploads, default behaviour).
+     */
+    @Nullable
+    protected LogjobAutomation.UploadPolicy buildUploadPolicyFromForm() {
+        boolean enabled = uploadPolicyEnabled.isChecked();
+        List<String> ssids = new ArrayList<>();
+        if (enabled && uploadPolicySsids.getText() != null) {
+            for (String ssid : uploadPolicySsids.getText().toString().split(",")) {
+                String trimmed = ssid.trim();
+                if (!trimmed.isEmpty()) {
+                    ssids.add(trimmed);
+                }
+            }
+        }
+        boolean unmeteredOnly = enabled && uploadPolicyUnmeteredOnly.isChecked();
+        LogjobAutomation.TimeWindow timeWindow = null;
+        if (enabled && uploadPolicyTimeWindowEnabled.isChecked()) {
+            int start = LogjobAutomation.parseHhMm(uploadPolicyStartTime.getText().toString());
+            int end = LogjobAutomation.parseHhMm(uploadPolicyEndTime.getText().toString());
+            if (start >= 0 && end >= 0) {
+                timeWindow = new LogjobAutomation.TimeWindow(start, end);
+            } else {
+                showToast(getString(R.string.automation_invalid_time), Toast.LENGTH_SHORT);
+            }
+        }
+        LogjobAutomation.Backoff backoff = buildBackoffFromForm();
+        boolean anyRestriction = !ssids.isEmpty() || unmeteredOnly || timeWindow != null;
+        if (!anyRestriction && (backoff == null || !backoff.isSet())) {
+            return null;
+        }
+        return new LogjobAutomation.UploadPolicy(ssids, unmeteredOnly, timeWindow, backoff);
+    }
+
+    /**
+     * Backoff schema from the form; null when no interval is set (normal
+     * WorkManager retry behaviour). An empty max means no cap.
+     */
+    @Nullable
+    protected LogjobAutomation.Backoff buildBackoffFromForm() {
+        int baseMinutes = 0;
+        if (uploadPolicyBackoffBase.getText() != null
+                && !uploadPolicyBackoffBase.getText().toString().trim().isEmpty()) {
+            try {
+                baseMinutes = Math.max(0, Integer.parseInt(uploadPolicyBackoffBase.getText().toString().trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (baseMinutes <= 0) {
+            return null;
+        }
+        int maxMinutes = 0;
+        if (uploadPolicyBackoffMax.getText() != null
+                && !uploadPolicyBackoffMax.getText().toString().trim().isEmpty()) {
+            try {
+                maxMinutes = Math.max(0, Integer.parseInt(uploadPolicyBackoffMax.getText().toString().trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        int strategy = uploadPolicyBackoffExponential.isChecked()
+                ? LogjobAutomation.Backoff.EXPONENTIAL
+                : LogjobAutomation.Backoff.FIXED;
+        return new LogjobAutomation.Backoff(strategy, baseMinutes, maxMinutes);
     }
 
     protected void showToast(CharSequence text, int duration) {

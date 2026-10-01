@@ -20,6 +20,7 @@ import androidx.preference.Preference;
 import net.eneiluj.nextcloud.phonetrack.R;
 import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.util.ICallback;
+import net.eneiluj.nextcloud.phonetrack.util.LogjobAutomation;
 
 import static android.webkit.URLUtil.isValidUrl;
 
@@ -142,6 +143,8 @@ public class EditCustomLogjobFragment extends EditLogjobFragment {
                         (oldPassword != null && newPassword != null && !oldPassword.equals(newPassword))
         );
 
+        LogjobAutomation newAutomation = buildAutomationFromForm();
+        boolean automationChanged = !java.util.Objects.equals(logjob.getAutomation(), newAutomation);
         // if this is an existing logjob
         if (logjob.getId() != 0) {
             if (logjob.getTitle().equals(newTitle) &&
@@ -156,7 +159,8 @@ public class EditCustomLogjobFragment extends EditLogjobFragment {
                     logjob.useSignificantMotionMixed() == newUseSignificantMotionMixed &&
                     logjob.getLocationRequestTimeout() == newTimeout &&
                     !loginChanged &&
-                    !passwordChanged
+                    !passwordChanged &&
+                    !automationChanged
                     ) {
                 Log.v(getClass().getSimpleName(), "... not saving logjob, since nothing has changed");
             } else {
@@ -167,6 +171,8 @@ public class EditCustomLogjobFragment extends EditLogjobFragment {
                         newUseSignificantMotion, newUseSignificantMotionMixed, newTimeout,
                         newLogin, newPassword, newJson, callback
                 );
+                logjob.setAutomation(newAutomation);
+                db.updateLogjobAutomation(logjob.getId(), newAutomation);
                 notifyLoggerService(logjob.getId());
                 //Log.i(TAG, "AFFFFFFTTTTTTEEERRRRR : "+logjob);
                 //listener.onLogjobUpdated(logjob);
@@ -180,6 +186,7 @@ public class EditCustomLogjobFragment extends EditLogjobFragment {
                     newUseSignificantMotion, newUseSignificantMotionMixed, newTimeout,
                     newPost, false, 0, newLogin, newPassword, newJson
             );
+            newLogjob.setAutomation(newAutomation);
             long newId = db.addLogjob(newLogjob);
             notifyLoggerService(newId);
         }

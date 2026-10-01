@@ -53,8 +53,10 @@ import androidx.core.app.ServiceCompat;
 import androidx.core.app.TaskStackBuilder;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import net.eneiluj.nextcloud.phonetrack.R;
@@ -62,6 +64,7 @@ import net.eneiluj.nextcloud.phonetrack.android.activity.LogjobsListViewActivity
 import net.eneiluj.nextcloud.phonetrack.android.fragment.PreferencesFragment;
 import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
+import net.eneiluj.nextcloud.phonetrack.util.AutomationEngine;
 import net.eneiluj.nextcloud.phonetrack.util.SupportUtil;
 import net.eneiluj.nextcloud.phonetrack.util.CorrectingLocation;
 import net.eneiluj.nextcloud.phonetrack.util.SystemLogger;
@@ -123,6 +126,8 @@ public class LoggerService extends Service {
     public static boolean DEBUG = true;
 
     private Map<Long, LogjobWorker> mLogjobWorkers;
+    private final Set<Long> automationPausedJobIds = new HashSet<>();
+    private AutomationEngine automationEngine;
 
     private ConnectionStateMonitor connectionMonitor;
     private BroadcastReceiver powerSaverChangeReceiver;
@@ -232,9 +237,9 @@ public class LoggerService extends Service {
                     SystemLogger.d(TAG, "[POWER LISTENER] power saving state changed");
                     SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
                     boolean respectPowerSaveMode = prefs.getBoolean(getString(R.string.pref_key_power_saving_awareness), false);
-                    if (respectPowerSaveMode) {
-                        updateAllActiveLogjobs();
-                    }
+                    // battery saver also changes the effective sampling of logjobs
+                    // with low power overrides: refresh them all
+                    updateAllActiveLogjobs();
                 }
             };
             IntentFilter filter = new IntentFilter();
@@ -552,6 +557,32 @@ public class LoggerService extends Service {
     }
 
     /**
+     * Whether the logjob's automation conditions (time window, Wi-Fi SSID, fence)
+     * currently pause it: no location is requested while paused, so the logjob
+     * costs nothing until the condition clears. Evaluated again at every
+     * acquisition attempt, so no background watcher is needed for time and Wi-Fi.
+     */
+    private boolean isAutomationPaused(DBLogjob lj) {
+        if (lj.getAutomation() == null || !lj.getAutomation().hasAnyCondition()) {
+            automationPausedJobIds.remove(lj.getId());
+            return false;
+        }
+        if (automationEngine == null) {
+            automationEngine = new AutomationEngine(new AutomationEngine.RealDeviceState(this));
+        }
+        boolean paused = automationEngine.isPaused(lj.getAutomation());
+        if (paused) {
+            automationPausedJobIds.add(lj.getId());
+        } else {
+            automationPausedJobIds.remove(lj.getId());
+        }
+        if (isRunning) {
+            updateNotificationContent();
+        }
+        return paused;
+    }
+
+    /**
      * Request location updates
      * @return True if succeeded from at least one provider
      */
@@ -565,6 +596,10 @@ public class LoggerService extends Service {
         LogjobWorker logjobWorker = mLogjobWorkers.get(ljId);
         if (lj == null || gpsLocListener == null || networkLocListener == null || logjobWorker == null) {
             SystemLogger.d(TAG, "requestLocationUpdates ERROR for job " + ljId + ". Unexpected null value.");
+            return false;
+        }
+        if (isAutomationPaused(lj)) {
+            SystemLogger.d(TAG, "requestLocationUpdates job " + ljId + " skipped: paused by automation condition");
             return false;
         }
         boolean hasLocationUpdates = false;
@@ -772,7 +807,14 @@ public class LoggerService extends Service {
     private void updateNotificationContent() {
         String nbLocations = String.valueOf(db.getLocationNotSyncedCount());
         String nbSent = String.valueOf(db.getNbTotalSync());
-        mNotificationBuilder.setContentText(String.format(getString(R.string.is_running), nbLocations, nbSent));
+        String text;
+        if (!automationPausedJobIds.isEmpty()) {
+            text = String.format(getString(R.string.is_running), nbLocations, nbSent)
+                    + " · " + getString(R.string.automation_paused_notification, automationPausedJobIds.size());
+        } else {
+            text = String.format(getString(R.string.is_running), nbLocations, nbSent);
+        }
+        mNotificationBuilder.setContentText(text);
         mNotificationManager.notify(this.NOTIFICATION_ID, mNotificationBuilder.build());
     }
 
@@ -1042,6 +1084,41 @@ public class LoggerService extends Service {
         WebTrackWorker.enqueue(getApplicationContext(), logjobId);
     }
 
+    /**
+     * Whether the device is currently in battery saver mode.
+     */
+    private boolean isPowerSaveMode() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isPowerSaveMode();
+    }
+
+    /**
+     * The log job's effective sampling interval: the low power override when
+     * the device is in battery saver mode and the job defines one, the normal
+     * interval otherwise.
+     */
+    private int effectiveMinTime(DBLogjob logjob) {
+        if (isPowerSaveMode() && logjob.getAutomation() != null
+                && logjob.getAutomation().lowPower != null
+                && logjob.getAutomation().lowPower.minTime >= 0) {
+            return logjob.getAutomation().lowPower.minTime;
+        }
+        return logjob.getMinTime();
+    }
+
+    /**
+     * The log job's effective minimum distance, with the same low power
+     * override rule as {@link #effectiveMinTime(DBLogjob)}.
+     */
+    private int effectiveMinDistance(DBLogjob logjob) {
+        if (isPowerSaveMode() && logjob.getAutomation() != null
+                && logjob.getAutomation().lowPower != null
+                && logjob.getAutomation().lowPower.minDistance >= 0) {
+            return logjob.getAutomation().lowPower.minDistance;
+        }
+        return logjob.getMinDistance();
+    }
+
     // worker superclass
     private abstract class LogjobWorker extends TriggerEventListener {
         protected mLocationListener gpsLocationListener;
@@ -1084,7 +1161,7 @@ public class LoggerService extends Service {
             nextPointIntent = null;
             mCachedNetworkResult = null;
 
-            mIntervalTimeMillis = mLogJob.getMinTime() * 1000L;
+            mIntervalTimeMillis = effectiveMinTime(mLogJob) * 1000L;
             mUseInterval = mIntervalTimeMillis > 0;
             mUseSignificantMotion = logjob.useSignificantMotion();
             mUseMixedMode = logjob.useSignificantMotionMixed();
@@ -1092,7 +1169,7 @@ public class LoggerService extends Service {
         }
 
         protected boolean isMinDistanceOk(CorrectingLocation loc) {
-            int minDistance = mLogJob.getMinDistance();
+            int minDistance = effectiveMinDistance(mLogJob);
             if (minDistance == 0 || lastLocation == null) {
                 return true;
             }
@@ -1269,7 +1346,7 @@ public class LoggerService extends Service {
                     // how much time did it take to get current position?
                     long cTs = System.currentTimeMillis() / 1000;
                     long timeSpentSearching = cTs - lastAcquisitionStartTimestamp;
-                    long timeToWaitSecond = mLogJob.getMinTime() - timeSpentSearching;
+                    long timeToWaitSecond = effectiveMinTime(mLogJob) - timeSpentSearching;
                     if (timeToWaitSecond < 0) {
                         timeToWaitSecond = 0;
                     }
