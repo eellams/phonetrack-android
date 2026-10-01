@@ -77,6 +77,9 @@ public class LogjobAutomation implements Serializable {
     /** Optional low power (battery saver) sampling overrides; null when unused. */
     @Nullable
     public final LowPower lowPower;
+    /** Optional upload restrictions; null when uploads are unrestricted. */
+    @Nullable
+    public final UploadPolicy uploadPolicy;
 
     public LogjobAutomation(@Nullable TimeWindow timeWindow, @Nullable List<String> wifiSsids,
                             @Nullable Fence fence) {
@@ -85,14 +88,28 @@ public class LogjobAutomation implements Serializable {
 
     public LogjobAutomation(@Nullable TimeWindow timeWindow, @Nullable List<String> wifiSsids,
                             @Nullable Fence fence, @Nullable LowPower lowPower) {
+        this(timeWindow, wifiSsids, fence, lowPower, null);
+    }
+
+    public LogjobAutomation(@Nullable TimeWindow timeWindow, @Nullable List<String> wifiSsids,
+                            @Nullable Fence fence, @Nullable LowPower lowPower,
+                            @Nullable UploadPolicy uploadPolicy) {
         this.timeWindow = timeWindow;
         this.wifiSsids = wifiSsids == null ? new ArrayList<>() : wifiSsids;
         this.fence = fence;
         this.lowPower = lowPower;
+        this.uploadPolicy = uploadPolicy;
     }
 
     public boolean hasAnyCondition() {
         return timeWindow != null || !wifiSsids.isEmpty() || fence != null;
+    }
+
+    public boolean hasAnySetting() {
+        boolean lowPowerSet = lowPower != null && !lowPower.isDefault();
+        boolean uploadPolicySet = uploadPolicy != null
+                && (uploadPolicy.hasAnyRestriction() || uploadPolicy.retryMinutes > 0);
+        return hasAnyCondition() || lowPowerSet || uploadPolicySet;
     }
 
     /** True if "now" falls in the window. A window may wrap past midnight (e.g. 21:00-06:00). */
@@ -148,8 +165,7 @@ public class LogjobAutomation implements Serializable {
         }
         try {
             LogjobAutomation automation = GSON.fromJson(json, LogjobAutomation.class);
-            return automation == null || (!automation.hasAnyCondition()
-                    && (automation.lowPower == null || automation.lowPower.isDefault())) ? null : automation;
+            return automation == null || !automation.hasAnySetting() ? null : automation;
         } catch (RuntimeException e) {
             return null;
         }
@@ -179,5 +195,64 @@ public class LogjobAutomation implements Serializable {
     public static String formatHhMm(int minutes) {
         minutes = Math.max(0, Math.min(24 * 60 - 1, minutes));
         return String.format(Locale.US, "%02d:%02d", minutes / 60, minutes % 60);
+    }
+
+    /**
+     * When buffered positions may be uploaded: only on given Wi-Fi SSIDs, only
+     * on unmetered networks, and/or only between given times (minutes since
+     * midnight, wrapping past midnight like the pause window). Positions keep
+     * buffering while an upload is not allowed; nothing is lost, just delayed.
+     */
+    public static class UploadPolicy implements Serializable {
+        public final List<String> ssids;
+        public final boolean unmeteredOnly;
+        @Nullable
+        public final TimeWindow timeWindow;
+        /** minutes to wait after a failed upload before trying again; 0 uses the default backoff */
+        public final int retryMinutes;
+
+        public UploadPolicy(@Nullable List<String> ssids, boolean unmeteredOnly,
+                            @Nullable TimeWindow timeWindow, int retryMinutes) {
+            this.ssids = ssids == null ? new ArrayList<>() : ssids;
+            this.unmeteredOnly = unmeteredOnly;
+            this.timeWindow = timeWindow;
+            this.retryMinutes = retryMinutes;
+        }
+
+        public boolean hasAnyRestriction() {
+            return !ssids.isEmpty() || unmeteredOnly || timeWindow != null;
+        }
+
+        public boolean isSsidAllowed(@Nullable String currentSsid) {
+            if (ssids.isEmpty()) {
+                return true;
+            }
+            return currentSsid != null && !currentSsid.replace("\"", "").trim().isEmpty()
+                    && containsIgnoreCase(ssids, currentSsid.replace("\"", "").trim());
+        }
+
+        public boolean isTimeAllowed(int nowMinutes) {
+            if (timeWindow == null) {
+                return true;
+            }
+            int start = timeWindow.startMinutes;
+            int end = timeWindow.endMinutes;
+            if (start == end) {
+                return true;
+            }
+            if (start < end) {
+                return nowMinutes >= start && nowMinutes < end;
+            }
+            return nowMinutes >= start || nowMinutes < end;
+        }
+
+        private static boolean containsIgnoreCase(List<String> list, String value) {
+            for (String entry : list) {
+                if (entry != null && entry.trim().equalsIgnoreCase(value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }

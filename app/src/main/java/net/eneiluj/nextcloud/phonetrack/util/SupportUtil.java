@@ -2,8 +2,10 @@ package net.eneiluj.nextcloud.phonetrack.util;
 
 import android.Manifest;
 import android.content.Context;
+import android.net.ConnectivityManager;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
@@ -123,6 +125,24 @@ public class SupportUtil {
      * el2 End altitude in meters
      * @returns Distance in Meters
      */
+    /**
+     * True if the active network is connected and not metered (Wi-Fi or Ethernet).
+     */
+    public static boolean isConnectedUnmetered(@NonNull Context context) {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return false;
+        }
+        android.net.Network network = cm.getActiveNetwork();
+        if (network == null) {
+            return false;
+        }
+        android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+        return caps != null
+                && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+    }
+
     public static double distance(double lat1, double lat2, double lon1,
                                   double lon2, @Nullable Double el1p, @Nullable Double el2p) {
 

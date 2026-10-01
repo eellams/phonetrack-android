@@ -135,6 +135,15 @@ public abstract class EditLogjobFragment extends Fragment {
     protected LinearLayout automationLowPowerFields;
     protected EditText automationLowPowerMinTime;
     protected EditText automationLowPowerMinDistance;
+    protected CheckBox uploadPolicyEnabled;
+    protected LinearLayout uploadPolicyFields;
+    protected EditText uploadPolicySsids;
+    protected CheckBox uploadPolicyUnmeteredOnly;
+    protected CheckBox uploadPolicyTimeWindowEnabled;
+    protected LinearLayout uploadPolicyTimeWindowFields;
+    protected EditText uploadPolicyStartTime;
+    protected EditText uploadPolicyEndTime;
+    protected EditText uploadPolicyRetryMinutes;
 
     protected LinearLayout editUseSignificantMotionLayout;
     protected LinearLayout editUseSignificantMotionIntervalLayout;
@@ -323,6 +332,39 @@ public abstract class EditLogjobFragment extends Fragment {
         }
         automationLowPowerEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
                 automationLowPowerFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        uploadPolicyEnabled = view.findViewById(R.id.uploadPolicyEnabled);
+        uploadPolicyFields = view.findViewById(R.id.uploadPolicyFields);
+        uploadPolicySsids = view.findViewById(R.id.uploadPolicySsids);
+        uploadPolicyUnmeteredOnly = view.findViewById(R.id.uploadPolicyUnmeteredOnly);
+        uploadPolicyTimeWindowEnabled = view.findViewById(R.id.uploadPolicyTimeWindowEnabled);
+        uploadPolicyTimeWindowFields = view.findViewById(R.id.uploadPolicyTimeWindowFields);
+        uploadPolicyStartTime = view.findViewById(R.id.uploadPolicyStartTime);
+        uploadPolicyEndTime = view.findViewById(R.id.uploadPolicyEndTime);
+        uploadPolicyRetryMinutes = view.findViewById(R.id.uploadPolicyRetryMinutes);
+        if (automation != null && automation.uploadPolicy != null
+                && automation.uploadPolicy.hasAnyRestriction()) {
+            LogjobAutomation.UploadPolicy policy = automation.uploadPolicy;
+            uploadPolicyEnabled.setChecked(true);
+            uploadPolicyFields.setVisibility(View.VISIBLE);
+            if (!policy.ssids.isEmpty()) {
+                uploadPolicySsids.setText(android.text.TextUtils.join(", ", policy.ssids));
+            }
+            uploadPolicyUnmeteredOnly.setChecked(policy.unmeteredOnly);
+            if (policy.timeWindow != null) {
+                uploadPolicyTimeWindowEnabled.setChecked(true);
+                uploadPolicyTimeWindowFields.setVisibility(View.VISIBLE);
+                uploadPolicyStartTime.setText(LogjobAutomation.formatHhMm(policy.timeWindow.startMinutes));
+                uploadPolicyEndTime.setText(LogjobAutomation.formatHhMm(policy.timeWindow.endMinutes));
+            }
+        }
+        if (automation != null && automation.uploadPolicy != null
+                && automation.uploadPolicy.retryMinutes > 0) {
+            uploadPolicyRetryMinutes.setText(String.valueOf(automation.uploadPolicy.retryMinutes));
+        }
+        uploadPolicyEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                uploadPolicyFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        uploadPolicyTimeWindowEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                uploadPolicyTimeWindowFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
         // Setup significant motion option, only show if device supports it
         if (deviceSupportsSignificantMotion()) {
             editUseSignificantMotion.setChecked(logjob.useSignificantMotion());
@@ -930,10 +972,57 @@ public abstract class EditLogjobFragment extends Fragment {
                 lowPower = new LogjobAutomation.LowPower(lowPowerMinTime, lowPowerMinDistance);
             }
         }
-        if (timeWindow == null && ssids.isEmpty() && fence == null && lowPower == null) {
+        LogjobAutomation.UploadPolicy uploadPolicy = buildUploadPolicyFromForm();
+        if (timeWindow == null && ssids.isEmpty() && fence == null && lowPower == null
+                && uploadPolicy == null) {
             return null;
         }
-        return new LogjobAutomation(timeWindow, ssids, fence, lowPower);
+        return new LogjobAutomation(timeWindow, ssids, fence, lowPower, uploadPolicy);
+    }
+
+    /**
+     * Upload restrictions from the form: null when the section is off and no
+     * retry interval is set (unrestricted uploads, default behaviour).
+     */
+    @Nullable
+    protected LogjobAutomation.UploadPolicy buildUploadPolicyFromForm() {
+        boolean enabled = uploadPolicyEnabled.isChecked();
+        List<String> ssids = new ArrayList<>();
+        if (enabled && uploadPolicySsids.getText() != null) {
+            for (String ssid : uploadPolicySsids.getText().toString().split(",")) {
+                String trimmed = ssid.trim();
+                if (!trimmed.isEmpty()) {
+                    ssids.add(trimmed);
+                }
+            }
+        }
+        boolean unmeteredOnly = enabled && uploadPolicyUnmeteredOnly.isChecked();
+        LogjobAutomation.TimeWindow timeWindow = null;
+        if (enabled && uploadPolicyTimeWindowEnabled.isChecked()) {
+            int start = LogjobAutomation.parseHhMm(uploadPolicyStartTime.getText().toString());
+            int end = LogjobAutomation.parseHhMm(uploadPolicyEndTime.getText().toString());
+            if (start >= 0 && end >= 0) {
+                timeWindow = new LogjobAutomation.TimeWindow(start, end);
+            } else {
+                showToast(getString(R.string.automation_invalid_time), Toast.LENGTH_SHORT);
+            }
+        }
+        if (!enabled) {
+            return null;
+        }
+        int retryMinutes = 0;
+        if (uploadPolicyRetryMinutes.getText() != null
+                && !uploadPolicyRetryMinutes.getText().toString().trim().isEmpty()) {
+            try {
+                retryMinutes = Math.max(0, Integer.parseInt(uploadPolicyRetryMinutes.getText().toString().trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        boolean anyRestriction = !ssids.isEmpty() || unmeteredOnly || timeWindow != null;
+        if (!anyRestriction && retryMinutes <= 0) {
+            return null;
+        }
+        return new LogjobAutomation.UploadPolicy(ssids, unmeteredOnly, timeWindow, retryMinutes);
     }
 
     protected void showToast(CharSequence text, int duration) {

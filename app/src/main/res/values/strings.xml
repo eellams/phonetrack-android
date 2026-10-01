@@ -174,6 +174,13 @@
     <string name="automation_low_power_summary">Slower sampling while the device is in battery saver mode</string>
     <string name="automation_low_power_min_time">Interval (s), empty = keep normal</string>
     <string name="automation_low_power_min_distance">Min distance (m), empty = keep normal</string>
+    <string name="upload_policy_title">Upload policy</string>
+    <string name="upload_policy_summary">Restrict when buffered positions are uploaded; they keep waiting on the phone until then</string>
+    <string name="upload_policy_enabled_title">Restrict uploads of this log job</string>
+    <string name="upload_policy_ssids_hint">Only upload on Wi-Fi names (SSIDs), comma separated; empty = any network</string>
+    <string name="upload_policy_unmetered_title">Only upload on unmetered networks (Wi-Fi/Ethernet)</string>
+    <string name="upload_policy_time_window_title">Only upload between times (every day)</string>
+    <string name="upload_policy_retry_minutes_hint">After a failed upload, retry every N minutes (empty = normal backoff)</string>
     <string name="automation_paused_notification">%1$d paused by automation</string>
 <string name="is_running">running (%1$s pending, %2$s sent)</string>
 

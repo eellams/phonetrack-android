@@ -59,6 +59,7 @@ public class WebTrackSync {
     private final PhoneTrackSQLiteOpenHelper db;
     private final WebTrackHelper web;
     private int sent;
+    private final List<Long> failedLogjobIds = new ArrayList<>();
 
     public WebTrackSync(Context context) {
         this.context = context.getApplicationContext();
@@ -75,6 +76,7 @@ public class WebTrackSync {
     @WorkerThread
     public boolean sync(long ljIdToSync) {
         sent = 0;
+        failedLogjobIds.clear();
         boolean anyError = false;
 
         // get the logjobs
@@ -242,15 +244,18 @@ public class WebTrackSync {
                     Log.d(TAG, "[websync io exception: " + e + "]");
                 }
                 anyError = true;
+                failedLogjobIds.add(ljId);
                 handleError(e, ljId);
             } catch (JSONException e2) {
                 if (LoggerService.DEBUG) {
                     Log.d(TAG, "[websync JSON exception: " + e2 + "]");
                 }
                 anyError = true;
+                failedLogjobIds.add(ljId);
                 handleError(e2, ljId);
             } catch (Exception e3) {
                 anyError = true;
+                failedLogjobIds.add(ljId);
                 handleError(e3, ljId);
             }
         }
@@ -338,6 +343,11 @@ public class WebTrackSync {
     }
 
     /** Number of positions uploaded by the last {@link #sync} call. */
+    /** IDs of the logjobs whose upload failed in the last sync() call. */
+    public List<Long> getFailedLogjobIds() {
+        return failedLogjobIds;
+    }
+
     public int getSentCount() {
         return sent;
     }

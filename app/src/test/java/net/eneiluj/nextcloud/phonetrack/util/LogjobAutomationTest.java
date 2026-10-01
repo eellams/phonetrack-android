@@ -133,6 +133,48 @@ public class LogjobAutomationTest {
     }
 
     @Test
+    public void uploadPolicyRestrictsSsids() {
+        LogjobAutomation.UploadPolicy policy = new LogjobAutomation.UploadPolicy(
+                Arrays.asList("HomeWiFi"), false, null, 0);
+        assertTrue(policy.isSsidAllowed("homewifi"));
+        assertTrue(policy.isSsidAllowed(null) == false);
+        // empty list = any network
+        LogjobAutomation.UploadPolicy open = new LogjobAutomation.UploadPolicy(
+                null, false, null, 0);
+        assertTrue(open.isSsidAllowed(null));
+    }
+
+    @Test
+    public void uploadPolicyTimeWindow() {
+        LogjobAutomation.UploadPolicy policy = new LogjobAutomation.UploadPolicy(
+                null, false, new LogjobAutomation.TimeWindow(22 * 60, 6 * 60), 0);
+        assertFalse(policy.isTimeAllowed(12 * 60));
+        assertTrue(policy.isTimeAllowed(23 * 60));
+        assertTrue(policy.isTimeAllowed(3 * 60));
+    }
+
+    @Test
+    public void uploadPolicyJsonRoundTrip() {
+        LogjobAutomation automation = new LogjobAutomation(null, null, null, null,
+                new LogjobAutomation.UploadPolicy(
+                        Arrays.asList("HomeWiFi"), true,
+                        new LogjobAutomation.TimeWindow(22 * 60, 6 * 60), 60));
+        LogjobAutomation parsed = LogjobAutomation.fromJson(automation.toJson());
+        org.junit.Assert.assertNotNull(parsed.uploadPolicy);
+        assertTrue(parsed.uploadPolicy.unmeteredOnly);
+        org.junit.Assert.assertEquals(60, parsed.uploadPolicy.retryMinutes);
+        assertTrue(parsed.uploadPolicy.isSsidAllowed("HOMEWIFI"));
+        assertTrue(parsed.uploadPolicy.isTimeAllowed(23 * 60));
+    }
+
+    @Test
+    public void uploadPolicyAloneKeepsAutomationAlive() {
+        LogjobAutomation automation = new LogjobAutomation(null, null, null, null,
+                new LogjobAutomation.UploadPolicy(null, true, null, 0));
+        org.junit.Assert.assertNotNull(LogjobAutomation.fromJson(automation.toJson()));
+    }
+
+    @Test
     public void hhMmParsingAndFormatting() {
         assertEquals(1267, LogjobAutomation.parseHhMm("21:07"));
         assertEquals(0, LogjobAutomation.parseHhMm("00:00"));

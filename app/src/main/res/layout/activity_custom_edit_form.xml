@@ -922,7 +922,131 @@
 
                 </LinearLayout>
 
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="1px"
+                android:src="@color/separator" />
+
+            <LinearLayout
+                android:id="@+id/uploadPolicyLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/uploadPolicyTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/upload_policy_title"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/uploadPolicySummary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingLeft="5dp"
+                    android:text="@string/upload_policy_summary" />
+
+                <CheckBox
+                    android:id="@+id/uploadPolicyEnabled"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/upload_policy_enabled_title" />
+
+                <LinearLayout
+                    android:id="@+id/uploadPolicyFields"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_layout_upload_policy_ssids"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/upload_policy_ssids_hint">
+
+                        <EditText
+                            android:id="@+id/uploadPolicySsids"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text"
+                            android:importantForAutofill="no" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <CheckBox
+                        android:id="@+id/uploadPolicyUnmeteredOnly"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/upload_policy_unmetered_title" />
+
+                    <CheckBox
+                        android:id="@+id/uploadPolicyTimeWindowEnabled"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/upload_policy_time_window_title" />
+
+                    <LinearLayout
+                        android:id="@+id/uploadPolicyTimeWindowFields"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/input_layout_upload_policy_start_time"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="@string/automation_start_time">
+
+                            <EditText
+                                android:id="@+id/uploadPolicyStartTime"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ems="5"
+                                android:inputType="time"
+                                android:importantForAutofill="no" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/input_layout_upload_policy_end_time"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="@string/automation_end_time">
+
+                            <EditText
+                                android:id="@+id/uploadPolicyEndTime"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ems="5"
+                                android:inputType="time"
+                                android:importantForAutofill="no" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_layout_upload_policy_retry_minutes"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/upload_policy_retry_minutes_hint">
+
+                        <EditText
+                            android:id="@+id/uploadPolicyRetryMinutes"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:importantForAutofill="no" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                </LinearLayout>
+
             </LinearLayout>
+        </LinearLayout>
         </LinearLayout>
     </ScrollView>
 
