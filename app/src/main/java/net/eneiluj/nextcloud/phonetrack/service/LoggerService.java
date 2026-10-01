@@ -237,9 +237,9 @@ public class LoggerService extends Service {
                     SystemLogger.d(TAG, "[POWER LISTENER] power saving state changed");
                     SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
                     boolean respectPowerSaveMode = prefs.getBoolean(getString(R.string.pref_key_power_saving_awareness), false);
-                    if (respectPowerSaveMode) {
-                        updateAllActiveLogjobs();
-                    }
+                    // battery saver also changes the effective sampling of logjobs
+                    // with low power overrides: refresh them all
+                    updateAllActiveLogjobs();
                 }
             };
             IntentFilter filter = new IntentFilter();
@@ -1084,6 +1084,41 @@ public class LoggerService extends Service {
         WebTrackWorker.enqueue(getApplicationContext(), logjobId);
     }
 
+    /**
+     * Whether the device is currently in battery saver mode.
+     */
+    private boolean isPowerSaveMode() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isPowerSaveMode();
+    }
+
+    /**
+     * The log job's effective sampling interval: the low power override when
+     * the device is in battery saver mode and the job defines one, the normal
+     * interval otherwise.
+     */
+    private int effectiveMinTime(DBLogjob logjob) {
+        if (isPowerSaveMode() && logjob.getAutomation() != null
+                && logjob.getAutomation().lowPower != null
+                && logjob.getAutomation().lowPower.minTime >= 0) {
+            return logjob.getAutomation().lowPower.minTime;
+        }
+        return logjob.getMinTime();
+    }
+
+    /**
+     * The log job's effective minimum distance, with the same low power
+     * override rule as {@link #effectiveMinTime(DBLogjob)}.
+     */
+    private int effectiveMinDistance(DBLogjob logjob) {
+        if (isPowerSaveMode() && logjob.getAutomation() != null
+                && logjob.getAutomation().lowPower != null
+                && logjob.getAutomation().lowPower.minDistance >= 0) {
+            return logjob.getAutomation().lowPower.minDistance;
+        }
+        return logjob.getMinDistance();
+    }
+
     // worker superclass
     private abstract class LogjobWorker extends TriggerEventListener {
         protected mLocationListener gpsLocationListener;
@@ -1126,7 +1161,7 @@ public class LoggerService extends Service {
             nextPointIntent = null;
             mCachedNetworkResult = null;
 
-            mIntervalTimeMillis = mLogJob.getMinTime() * 1000L;
+            mIntervalTimeMillis = effectiveMinTime(mLogJob) * 1000L;
             mUseInterval = mIntervalTimeMillis > 0;
             mUseSignificantMotion = logjob.useSignificantMotion();
             mUseMixedMode = logjob.useSignificantMotionMixed();
@@ -1134,7 +1169,7 @@ public class LoggerService extends Service {
         }
 
         protected boolean isMinDistanceOk(CorrectingLocation loc) {
-            int minDistance = mLogJob.getMinDistance();
+            int minDistance = effectiveMinDistance(mLogJob);
             if (minDistance == 0 || lastLocation == null) {
                 return true;
             }
@@ -1311,7 +1346,7 @@ public class LoggerService extends Service {
                     // how much time did it take to get current position?
                     long cTs = System.currentTimeMillis() / 1000;
                     long timeSpentSearching = cTs - lastAcquisitionStartTimestamp;
-                    long timeToWaitSecond = mLogJob.getMinTime() - timeSpentSearching;
+                    long timeToWaitSecond = effectiveMinTime(mLogJob) - timeSpentSearching;
                     if (timeToWaitSecond < 0) {
                         timeToWaitSecond = 0;
                     }

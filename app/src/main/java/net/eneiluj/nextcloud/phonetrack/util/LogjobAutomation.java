@@ -47,18 +47,48 @@ public class LogjobAutomation implements Serializable {
         }
     }
 
+    /**
+     * Alternative sampling parameters used while the device is in battery saver
+     * mode: a longer interval and/or a longer minimum distance, so the log job
+     * keeps logging (less often) instead of stopping or draining the battery.
+     */
+    public static class LowPower implements Serializable {
+        /** sampling interval in seconds while in battery saver; -1 keeps the normal one */
+        public final int minTime;
+        /** minimum distance in meters while in battery saver; -1 keeps the normal one */
+        public final int minDistance;
+
+        public LowPower(int minTime, int minDistance) {
+            this.minTime = minTime;
+            this.minDistance = minDistance;
+        }
+
+        public boolean isDefault() {
+            return minTime < 0 && minDistance < 0;
+        }
+    }
+
     @Nullable
     public final TimeWindow timeWindow;
     /** Pause while the device is connected to any of these (case-insensitive) Wi-Fi SSIDs. */
     public final List<String> wifiSsids;
     @Nullable
     public final Fence fence;
+    /** Optional low power (battery saver) sampling overrides; null when unused. */
+    @Nullable
+    public final LowPower lowPower;
 
     public LogjobAutomation(@Nullable TimeWindow timeWindow, @Nullable List<String> wifiSsids,
                             @Nullable Fence fence) {
+        this(timeWindow, wifiSsids, fence, null);
+    }
+
+    public LogjobAutomation(@Nullable TimeWindow timeWindow, @Nullable List<String> wifiSsids,
+                            @Nullable Fence fence, @Nullable LowPower lowPower) {
         this.timeWindow = timeWindow;
         this.wifiSsids = wifiSsids == null ? new ArrayList<>() : wifiSsids;
         this.fence = fence;
+        this.lowPower = lowPower;
     }
 
     public boolean hasAnyCondition() {
@@ -118,7 +148,8 @@ public class LogjobAutomation implements Serializable {
         }
         try {
             LogjobAutomation automation = GSON.fromJson(json, LogjobAutomation.class);
-            return automation == null || !automation.hasAnyCondition() ? null : automation;
+            return automation == null || (!automation.hasAnyCondition()
+                    && (automation.lowPower == null || automation.lowPower.isDefault())) ? null : automation;
         } catch (RuntimeException e) {
             return null;
         }

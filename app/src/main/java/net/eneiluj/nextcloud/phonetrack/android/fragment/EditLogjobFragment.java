@@ -131,6 +131,10 @@ public abstract class EditLogjobFragment extends Fragment {
     protected EditText automationLatitude;
     protected EditText automationLongitude;
     protected EditText automationRadius;
+    protected CheckBox automationLowPowerEnabled;
+    protected LinearLayout automationLowPowerFields;
+    protected EditText automationLowPowerMinTime;
+    protected EditText automationLowPowerMinDistance;
 
     protected LinearLayout editUseSignificantMotionLayout;
     protected LinearLayout editUseSignificantMotionIntervalLayout;
@@ -303,6 +307,22 @@ public abstract class EditLogjobFragment extends Fragment {
                 automationWifiSsids.setVisibility(isChecked ? View.VISIBLE : View.GONE));
         automationFenceEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
                 automationFenceFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        automationLowPowerEnabled = view.findViewById(R.id.automationLowPowerEnabled);
+        automationLowPowerFields = view.findViewById(R.id.automationLowPowerFields);
+        automationLowPowerMinTime = view.findViewById(R.id.automationLowPowerMinTime);
+        automationLowPowerMinDistance = view.findViewById(R.id.automationLowPowerMinDistance);
+        if (automation != null && automation.lowPower != null && !automation.lowPower.isDefault()) {
+            automationLowPowerEnabled.setChecked(true);
+            automationLowPowerFields.setVisibility(View.VISIBLE);
+            if (automation.lowPower.minTime >= 0) {
+                automationLowPowerMinTime.setText(String.valueOf(automation.lowPower.minTime));
+            }
+            if (automation.lowPower.minDistance >= 0) {
+                automationLowPowerMinDistance.setText(String.valueOf(automation.lowPower.minDistance));
+            }
+        }
+        automationLowPowerEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationLowPowerFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
         // Setup significant motion option, only show if device supports it
         if (deviceSupportsSignificantMotion()) {
             editUseSignificantMotion.setChecked(logjob.useSignificantMotion());
@@ -888,10 +908,32 @@ public abstract class EditLogjobFragment extends Fragment {
             } catch (NumberFormatException ignored) {
             }
         }
-        if (timeWindow == null && ssids.isEmpty() && fence == null) {
+        LogjobAutomation.LowPower lowPower = null;
+        if (automationLowPowerEnabled.isChecked()) {
+            int lowPowerMinTime = -1;
+            int lowPowerMinDistance = -1;
+            try {
+                if (automationLowPowerMinTime.getText() != null
+                        && !automationLowPowerMinTime.getText().toString().trim().isEmpty()) {
+                    lowPowerMinTime = Integer.parseInt(automationLowPowerMinTime.getText().toString().trim());
+                }
+            } catch (NumberFormatException ignored) {
+            }
+            try {
+                if (automationLowPowerMinDistance.getText() != null
+                        && !automationLowPowerMinDistance.getText().toString().trim().isEmpty()) {
+                    lowPowerMinDistance = Integer.parseInt(automationLowPowerMinDistance.getText().toString().trim());
+                }
+            } catch (NumberFormatException ignored) {
+            }
+            if (lowPowerMinTime >= 0 || lowPowerMinDistance >= 0) {
+                lowPower = new LogjobAutomation.LowPower(lowPowerMinTime, lowPowerMinDistance);
+            }
+        }
+        if (timeWindow == null && ssids.isEmpty() && fence == null && lowPower == null) {
             return null;
         }
-        return new LogjobAutomation(timeWindow, ssids, fence);
+        return new LogjobAutomation(timeWindow, ssids, fence, lowPower);
     }
 
     protected void showToast(CharSequence text, int duration) {

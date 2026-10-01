@@ -170,6 +170,10 @@
     <string name="automation_longitude">Longitude</string>
     <string name="automation_radius_m">Radius (m)</string>
     <string name="automation_invalid_time">Enter a time as HH:MM</string>
+    <string name="automation_low_power_title">Use these settings in battery saver mode</string>
+    <string name="automation_low_power_summary">Slower sampling while the device is in battery saver mode</string>
+    <string name="automation_low_power_min_time">Interval (s), empty = keep normal</string>
+    <string name="automation_low_power_min_distance">Min distance (m), empty = keep normal</string>
     <string name="automation_paused_notification">%1$d paused by automation</string>
 <string name="is_running">running (%1$s pending, %2$s sent)</string>
 

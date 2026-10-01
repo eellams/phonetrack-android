@@ -104,6 +104,35 @@ public class LogjobAutomationTest {
     }
 
     @Test
+    public void lowPowerRoundTripsThroughJson() {
+        LogjobAutomation automation = new LogjobAutomation(null, null, null,
+                new LogjobAutomation.LowPower(300, 50));
+        LogjobAutomation parsed = LogjobAutomation.fromJson(automation.toJson());
+        org.junit.Assert.assertNotNull(parsed.lowPower);
+        org.junit.Assert.assertEquals(300, parsed.lowPower.minTime);
+        org.junit.Assert.assertEquals(50, parsed.lowPower.minDistance);
+    }
+
+    @Test
+    public void lowPowerWithDefaultsOnlyParsesToNull() {
+        LogjobAutomation automation = new LogjobAutomation(null, null, null,
+                new LogjobAutomation.LowPower(-1, -1));
+        org.junit.Assert.assertNull(LogjobAutomation.fromJson(automation.toJson()));
+    }
+
+    @Test
+    public void lowPowerKeepsConditionsCompany() {
+        // a job with only a time window plus low power overrides survives the
+        // "nothing set" check on load
+        LogjobAutomation automation = new LogjobAutomation(window(21 * 60, 6 * 60), null, null,
+                new LogjobAutomation.LowPower(600, -1));
+        LogjobAutomation parsed = LogjobAutomation.fromJson(automation.toJson());
+        org.junit.Assert.assertNotNull(parsed);
+        org.junit.Assert.assertEquals(600, parsed.lowPower.minTime);
+        org.junit.Assert.assertEquals(-1, parsed.lowPower.minDistance);
+    }
+
+    @Test
     public void hhMmParsingAndFormatting() {
         assertEquals(1267, LogjobAutomation.parseHhMm("21:07"));
         assertEquals(0, LogjobAutomation.parseHhMm("00:00"));
