@@ -54,6 +54,8 @@ import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Toast;
 
 //import butterknife.ButterKnife;
@@ -143,7 +145,11 @@ public abstract class EditLogjobFragment extends Fragment {
     protected LinearLayout uploadPolicyTimeWindowFields;
     protected EditText uploadPolicyStartTime;
     protected EditText uploadPolicyEndTime;
-    protected EditText uploadPolicyRetryMinutes;
+    protected RadioGroup uploadPolicyBackoffStrategy;
+    protected RadioButton uploadPolicyBackoffFixed;
+    protected RadioButton uploadPolicyBackoffExponential;
+    protected EditText uploadPolicyBackoffBase;
+    protected EditText uploadPolicyBackoffMax;
 
     protected LinearLayout editUseSignificantMotionLayout;
     protected LinearLayout editUseSignificantMotionIntervalLayout;
@@ -340,7 +346,11 @@ public abstract class EditLogjobFragment extends Fragment {
         uploadPolicyTimeWindowFields = view.findViewById(R.id.uploadPolicyTimeWindowFields);
         uploadPolicyStartTime = view.findViewById(R.id.uploadPolicyStartTime);
         uploadPolicyEndTime = view.findViewById(R.id.uploadPolicyEndTime);
-        uploadPolicyRetryMinutes = view.findViewById(R.id.uploadPolicyRetryMinutes);
+        uploadPolicyBackoffStrategy = view.findViewById(R.id.uploadPolicyBackoffStrategy);
+        uploadPolicyBackoffFixed = view.findViewById(R.id.uploadPolicyBackoffFixed);
+        uploadPolicyBackoffExponential = view.findViewById(R.id.uploadPolicyBackoffExponential);
+        uploadPolicyBackoffBase = view.findViewById(R.id.uploadPolicyBackoffBase);
+        uploadPolicyBackoffMax = view.findViewById(R.id.uploadPolicyBackoffMax);
         if (automation != null && automation.uploadPolicy != null
                 && automation.uploadPolicy.hasAnyRestriction()) {
             LogjobAutomation.UploadPolicy policy = automation.uploadPolicy;
@@ -358,8 +368,18 @@ public abstract class EditLogjobFragment extends Fragment {
             }
         }
         if (automation != null && automation.uploadPolicy != null
-                && automation.uploadPolicy.retryMinutes > 0) {
-            uploadPolicyRetryMinutes.setText(String.valueOf(automation.uploadPolicy.retryMinutes));
+                && automation.uploadPolicy.backoff != null
+                && automation.uploadPolicy.backoff.isSet()) {
+            LogjobAutomation.Backoff backoff = automation.uploadPolicy.backoff;
+            if (backoff.strategy == LogjobAutomation.Backoff.EXPONENTIAL) {
+                uploadPolicyBackoffExponential.setChecked(true);
+            } else {
+                uploadPolicyBackoffFixed.setChecked(true);
+            }
+            uploadPolicyBackoffBase.setText(String.valueOf(backoff.baseMinutes));
+            if (backoff.maxMinutes > 0) {
+                uploadPolicyBackoffMax.setText(String.valueOf(backoff.maxMinutes));
+            }
         }
         uploadPolicyEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
                 uploadPolicyFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
@@ -1007,22 +1027,43 @@ public abstract class EditLogjobFragment extends Fragment {
                 showToast(getString(R.string.automation_invalid_time), Toast.LENGTH_SHORT);
             }
         }
-        if (!enabled) {
+        LogjobAutomation.Backoff backoff = buildBackoffFromForm();
+        boolean anyRestriction = !ssids.isEmpty() || unmeteredOnly || timeWindow != null;
+        if (!anyRestriction && (backoff == null || !backoff.isSet())) {
             return null;
         }
-        int retryMinutes = 0;
-        if (uploadPolicyRetryMinutes.getText() != null
-                && !uploadPolicyRetryMinutes.getText().toString().trim().isEmpty()) {
+        return new LogjobAutomation.UploadPolicy(ssids, unmeteredOnly, timeWindow, backoff);
+    }
+
+    /**
+     * Backoff schema from the form; null when no interval is set (normal
+     * WorkManager retry behaviour). An empty max means no cap.
+     */
+    @Nullable
+    protected LogjobAutomation.Backoff buildBackoffFromForm() {
+        int baseMinutes = 0;
+        if (uploadPolicyBackoffBase.getText() != null
+                && !uploadPolicyBackoffBase.getText().toString().trim().isEmpty()) {
             try {
-                retryMinutes = Math.max(0, Integer.parseInt(uploadPolicyRetryMinutes.getText().toString().trim()));
+                baseMinutes = Math.max(0, Integer.parseInt(uploadPolicyBackoffBase.getText().toString().trim()));
             } catch (NumberFormatException ignored) {
             }
         }
-        boolean anyRestriction = !ssids.isEmpty() || unmeteredOnly || timeWindow != null;
-        if (!anyRestriction && retryMinutes <= 0) {
+        if (baseMinutes <= 0) {
             return null;
         }
-        return new LogjobAutomation.UploadPolicy(ssids, unmeteredOnly, timeWindow, retryMinutes);
+        int maxMinutes = 0;
+        if (uploadPolicyBackoffMax.getText() != null
+                && !uploadPolicyBackoffMax.getText().toString().trim().isEmpty()) {
+            try {
+                maxMinutes = Math.max(0, Integer.parseInt(uploadPolicyBackoffMax.getText().toString().trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        int strategy = uploadPolicyBackoffExponential.isChecked()
+                ? LogjobAutomation.Backoff.EXPONENTIAL
+                : LogjobAutomation.Backoff.FIXED;
+        return new LogjobAutomation.Backoff(strategy, baseMinutes, maxMinutes);
     }
 
     protected void showToast(CharSequence text, int duration) {

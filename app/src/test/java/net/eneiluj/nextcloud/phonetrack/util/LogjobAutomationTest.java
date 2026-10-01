@@ -158,13 +158,55 @@ public class LogjobAutomationTest {
         LogjobAutomation automation = new LogjobAutomation(null, null, null, null,
                 new LogjobAutomation.UploadPolicy(
                         Arrays.asList("HomeWiFi"), true,
-                        new LogjobAutomation.TimeWindow(22 * 60, 6 * 60), 60));
+                        new LogjobAutomation.TimeWindow(22 * 60, 6 * 60),
+                        new LogjobAutomation.Backoff(LogjobAutomation.Backoff.EXPONENTIAL, 5, 120)));
         LogjobAutomation parsed = LogjobAutomation.fromJson(automation.toJson());
         org.junit.Assert.assertNotNull(parsed.uploadPolicy);
         assertTrue(parsed.uploadPolicy.unmeteredOnly);
-        org.junit.Assert.assertEquals(60, parsed.uploadPolicy.retryMinutes);
+        org.junit.Assert.assertNotNull(parsed.uploadPolicy.backoff);
+        org.junit.Assert.assertEquals(LogjobAutomation.Backoff.EXPONENTIAL, parsed.uploadPolicy.backoff.strategy);
+        org.junit.Assert.assertEquals(5, parsed.uploadPolicy.backoff.baseMinutes);
+        org.junit.Assert.assertEquals(120, parsed.uploadPolicy.backoff.maxMinutes);
         assertTrue(parsed.uploadPolicy.isSsidAllowed("HOMEWIFI"));
         assertTrue(parsed.uploadPolicy.isTimeAllowed(23 * 60));
+    }
+
+    @Test
+    public void legacyRetryMinutesStillParse() {
+        // settings written by the first iteration of this feature
+        LogjobAutomation parsed = LogjobAutomation.fromJson(
+                "{\"uploadPolicy\":{\"ssids\":[],\"unmeteredOnly\":false,\"timeWindow\":null,\"retryMinutes\":30}}");
+        org.junit.Assert.assertNotNull(parsed.uploadPolicy);
+        org.junit.Assert.assertNotNull(parsed.uploadPolicy.backoff);
+        org.junit.Assert.assertEquals(30, parsed.uploadPolicy.backoff.baseMinutes);
+        org.junit.Assert.assertEquals(LogjobAutomation.Backoff.FIXED, parsed.uploadPolicy.backoff.strategy);
+    }
+
+    @Test
+    public void backoffFixedIgnoresAttemptCount() {
+        LogjobAutomation.Backoff backoff = new LogjobAutomation.Backoff(
+                LogjobAutomation.Backoff.FIXED, 60, 0);
+        org.junit.Assert.assertEquals(60, backoff.minutesForAttempt(0));
+        org.junit.Assert.assertEquals(60, backoff.minutesForAttempt(5));
+    }
+
+    @Test
+    public void backoffExponentialDoublesAndCaps() {
+        LogjobAutomation.Backoff backoff = new LogjobAutomation.Backoff(
+                LogjobAutomation.Backoff.EXPONENTIAL, 5, 120);
+        org.junit.Assert.assertEquals(5, backoff.minutesForAttempt(0));
+        org.junit.Assert.assertEquals(10, backoff.minutesForAttempt(1));
+        org.junit.Assert.assertEquals(20, backoff.minutesForAttempt(2));
+        org.junit.Assert.assertEquals(120, backoff.minutesForAttempt(5));
+        org.junit.Assert.assertEquals(120, backoff.minutesForAttempt(50));
+    }
+
+    @Test
+    public void backoffUnsetIsNoop() {
+        LogjobAutomation.Backoff backoff = new LogjobAutomation.Backoff(
+                LogjobAutomation.Backoff.EXPONENTIAL, 0, 0);
+        assertFalse(backoff.isSet());
+        org.junit.Assert.assertEquals(0, backoff.minutesForAttempt(3));
     }
 
     @Test

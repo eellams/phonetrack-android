@@ -49,7 +49,7 @@ public class UploadSchedulerTest {
     @Test
     public void failureGateBlocksAndClears() {
         UploadScheduler scheduler = new UploadScheduler(context, new FixedState(), true);
-        scheduler.gateAfterFailure(1, 60);
+        scheduler.gateAfterFailure(1, new LogjobAutomation.Backoff(LogjobAutomation.Backoff.FIXED, 60, 0));
         assertFalse(scheduler.mayUploadNow(1, null));
 
         scheduler.clearGate(1);
@@ -59,7 +59,7 @@ public class UploadSchedulerTest {
     @Test
     public void gateIsPerLogjob() {
         UploadScheduler scheduler = new UploadScheduler(context, new FixedState(), true);
-        scheduler.gateAfterFailure(1, 60);
+        scheduler.gateAfterFailure(1, new LogjobAutomation.Backoff(LogjobAutomation.Backoff.FIXED, 60, 0));
         assertFalse(scheduler.mayUploadNow(1, null));
         assertTrue(scheduler.mayUploadNow(2, null));
         scheduler.clearGate(2);

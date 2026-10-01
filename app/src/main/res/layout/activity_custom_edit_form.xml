@@ -1029,19 +1029,68 @@
 
                     </LinearLayout>
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/input_layout_upload_policy_retry_minutes"
+                    <TextView
+                        android:id="@+id/uploadPolicyBackoffTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingLeft="5dp"
+                        android:text="@string/upload_policy_backoff_title" />
+
+                    <RadioGroup
+                        android:id="@+id/uploadPolicyBackoffStrategy"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/upload_policy_retry_minutes_hint">
+                        android:orientation="vertical">
 
-                        <EditText
-                            android:id="@+id/uploadPolicyRetryMinutes"
+                        <RadioButton
+                            android:id="@+id/uploadPolicyBackoffFixed"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:inputType="number"
-                            android:importantForAutofill="no" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                            android:text="@string/upload_policy_backoff_fixed" />
+
+                        <RadioButton
+                            android:id="@+id/uploadPolicyBackoffExponential"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/upload_policy_backoff_exponential" />
+                    </RadioGroup>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/input_layout_upload_policy_backoff_base"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="@string/upload_policy_backoff_base_hint">
+
+                            <EditText
+                                android:id="@+id/uploadPolicyBackoffBase"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:importantForAutofill="no" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/input_layout_upload_policy_backoff_max"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="@string/upload_policy_backoff_max_hint">
+
+                            <EditText
+                                android:id="@+id/uploadPolicyBackoffMax"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:importantForAutofill="no" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
 
                 </LinearLayout>
 

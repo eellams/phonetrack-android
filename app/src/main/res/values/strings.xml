@@ -180,7 +180,11 @@
     <string name="upload_policy_ssids_hint">Only upload on Wi-Fi names (SSIDs), comma separated; empty = any network</string>
     <string name="upload_policy_unmetered_title">Only upload on unmetered networks (Wi-Fi/Ethernet)</string>
     <string name="upload_policy_time_window_title">Only upload between times (every day)</string>
-    <string name="upload_policy_retry_minutes_hint">After a failed upload, retry every N minutes (empty = normal backoff)</string>
+    <string name="upload_policy_backoff_title">After a failed upload, retry:</string>
+    <string name="upload_policy_backoff_fixed">At a fixed interval (jump straight to every N minutes)</string>
+    <string name="upload_policy_backoff_exponential">Exponentially (interval doubles after each failure)</string>
+    <string name="upload_policy_backoff_base_hint">Interval (minutes), empty = normal retry</string>
+    <string name="upload_policy_backoff_max_hint">Max interval (minutes), empty = no cap</string>
     <string name="automation_paused_notification">%1$d paused by automation</string>
 <string name="is_running">running (%1$s pending, %2$s sent)</string>
 

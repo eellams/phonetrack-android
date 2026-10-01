@@ -5,19 +5,19 @@ import android.content.SharedPreferences;
 
 import androidx.annotation.Nullable;
 
-import java.util.Calendar;
-
 /**
  * Decides when buffered positions of a log job may be uploaded:
  * - the log job's upload policy (allowed SSIDs, unmetered-only, time window)
  * - a per-log job "gate" written after a failed upload, so the app does not
- *   keep hitting a server that is down: while the gate is in the future,
- *   uploads are skipped and the positions keep buffering.
+ *   keep hitting a server that is down. The gate duration follows the log
+ *   job's backoff schema: a fixed interval, or exponential growth capped at
+ *   an optional maximum. The failure counter resets on the first success.
  */
 public final class UploadScheduler {
 
     private static final String PREFS_NAME = "upload_scheduler";
     private static final String KEY_GATE_PREFIX = "retryGate_";
+    private static final String KEY_ATTEMPT_PREFIX = "retryAttempts_";
 
     private final Context context;
     private final AutomationEngine.DeviceState state;
@@ -51,18 +51,31 @@ public final class UploadScheduler {
         return policy.isTimeAllowed(state.nowMinutes());
     }
 
-    /** Blocks uploads for this log job until now + retryMinutes. */
-    public void gateAfterFailure(long logjobId, int retryMinutes) {
-        if (retryMinutes <= 0) {
+    /**
+     * Called after a failed upload: counts the failure and writes the gate
+     * for the delay the log job's backoff schema asks for. Does nothing when
+     * the log job has no backoff configured (the default WorkManager retry
+     * behaviour then applies).
+     */
+    public void gateAfterFailure(long logjobId, @Nullable LogjobAutomation.Backoff backoff) {
+        if (backoff == null || !backoff.isSet()) {
             return;
         }
-        long until = System.currentTimeMillis() + retryMinutes * 60_000L;
-        prefs().edit().putLong(KEY_GATE_PREFIX + logjobId, until).apply();
+        int attempt = getAttemptCount(logjobId);
+        long minutes = backoff.minutesForAttempt(attempt);
+        long until = System.currentTimeMillis() + minutes * 60_000L;
+        prefs().edit()
+                .putLong(KEY_GATE_PREFIX + logjobId, until)
+                .putInt(KEY_ATTEMPT_PREFIX + logjobId, attempt + 1)
+                .apply();
     }
 
-    /** Clears the gate, e.g. after a successful upload. */
+    /** Clears the gate and the failure counter, e.g. after a successful upload. */
     public void clearGate(long logjobId) {
-        prefs().edit().remove(KEY_GATE_PREFIX + logjobId).apply();
+        prefs().edit()
+                .remove(KEY_GATE_PREFIX + logjobId)
+                .remove(KEY_ATTEMPT_PREFIX + logjobId)
+                .apply();
     }
 
     public boolean isGated(long logjobId) {
@@ -70,13 +83,11 @@ public final class UploadScheduler {
         return until > System.currentTimeMillis();
     }
 
-    private SharedPreferences prefs() {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    private int getAttemptCount(long logjobId) {
+        return prefs().getInt(KEY_ATTEMPT_PREFIX + logjobId, 0);
     }
 
-    /** Minutes since midnight of the current time; exposed for tests. */
-    public static int nowMinutes() {
-        Calendar now = Calendar.getInstance();
-        return now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+    private SharedPreferences prefs() {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 }

@@ -108,7 +108,8 @@ public class LogjobAutomation implements Serializable {
     public boolean hasAnySetting() {
         boolean lowPowerSet = lowPower != null && !lowPower.isDefault();
         boolean uploadPolicySet = uploadPolicy != null
-                && (uploadPolicy.hasAnyRestriction() || uploadPolicy.retryMinutes > 0);
+                && (uploadPolicy.hasAnyRestriction()
+                    || (uploadPolicy.backoff != null && uploadPolicy.backoff.isSet()));
         return hasAnyCondition() || lowPowerSet || uploadPolicySet;
     }
 
@@ -165,7 +166,21 @@ public class LogjobAutomation implements Serializable {
         }
         try {
             LogjobAutomation automation = GSON.fromJson(json, LogjobAutomation.class);
-            return automation == null || !automation.hasAnySetting() ? null : automation;
+            if (automation == null) {
+                return null;
+            }
+            if (automation.uploadPolicy != null && automation.uploadPolicy.backoff == null
+                    && automation.uploadPolicy.retryMinutes != null
+                    && automation.uploadPolicy.retryMinutes > 0) {
+                // early development builds stored a plain interval: a fixed backoff
+                return new LogjobAutomation(automation.timeWindow, automation.wifiSsids,
+                        automation.fence, automation.lowPower,
+                        new UploadPolicy(automation.uploadPolicy.ssids,
+                                automation.uploadPolicy.unmeteredOnly,
+                                automation.uploadPolicy.timeWindow,
+                                new Backoff(Backoff.FIXED, automation.uploadPolicy.retryMinutes, 0)));
+            }
+            return automation.hasAnySetting() ? automation : null;
         } catch (RuntimeException e) {
             return null;
         }
@@ -203,20 +218,79 @@ public class LogjobAutomation implements Serializable {
      * midnight, wrapping past midnight like the pause window). Positions keep
      * buffering while an upload is not allowed; nothing is lost, just delayed.
      */
+    /**
+     * How long to wait after a failed upload before trying again. FIXED jumps
+     * straight to a fixed interval (e.g. "every 60 minutes while the server is
+     * down"); EXPONENTIAL doubles the base interval with every consecutive
+     * failure, up to an optional maximum. The counter resets on the first
+     * successful upload.
+     */
+    public static class Backoff implements Serializable {
+        public static final int FIXED = 0;
+        public static final int EXPONENTIAL = 1;
+
+        public final int strategy;
+        /** minutes between attempts (FIXED) or the starting interval (EXPONENTIAL) */
+        public final int baseMinutes;
+        /** maximum minutes between attempts; 0 = no cap */
+        public final int maxMinutes;
+
+        public Backoff(int strategy, int baseMinutes, int maxMinutes) {
+            this.strategy = strategy;
+            this.baseMinutes = baseMinutes;
+            this.maxMinutes = maxMinutes;
+        }
+
+        public boolean isSet() {
+            return baseMinutes > 0;
+        }
+
+        /** Minutes to wait after the given consecutive failure (0-based). */
+        public long minutesForAttempt(int attempt) {
+            if (baseMinutes <= 0) {
+                return 0;
+            }
+            if (strategy == EXPONENTIAL) {
+                long minutes;
+                try {
+                    minutes = Math.multiplyExact((long) baseMinutes, 1L << Math.min(attempt, 62));
+                } catch (ArithmeticException e) {
+                    minutes = Long.MAX_VALUE;
+                }
+                if (maxMinutes > 0) {
+                    minutes = Math.min(minutes, maxMinutes);
+                }
+                return minutes;
+            }
+            return baseMinutes;
+        }
+    }
+
     public static class UploadPolicy implements Serializable {
+        /** Only for reading settings written by early development builds of this feature. */
+        @Nullable
+        private Integer retryMinutes;
+
         public final List<String> ssids;
         public final boolean unmeteredOnly;
         @Nullable
         public final TimeWindow timeWindow;
-        /** minutes to wait after a failed upload before trying again; 0 uses the default backoff */
-        public final int retryMinutes;
+        /** how long to wait after a failed upload; null uses the default (WorkManager) backoff */
+        @Nullable
+        public final Backoff backoff;
 
         public UploadPolicy(@Nullable List<String> ssids, boolean unmeteredOnly,
                             @Nullable TimeWindow timeWindow, int retryMinutes) {
+            this(ssids, unmeteredOnly, timeWindow, retryMinutes <= 0 ? null
+                    : new Backoff(Backoff.FIXED, retryMinutes, 0));
+        }
+
+        public UploadPolicy(@Nullable List<String> ssids, boolean unmeteredOnly,
+                            @Nullable TimeWindow timeWindow, @Nullable Backoff backoff) {
             this.ssids = ssids == null ? new ArrayList<>() : ssids;
             this.unmeteredOnly = unmeteredOnly;
             this.timeWindow = timeWindow;
-            this.retryMinutes = retryMinutes;
+            this.backoff = backoff;
         }
 
         public boolean hasAnyRestriction() {

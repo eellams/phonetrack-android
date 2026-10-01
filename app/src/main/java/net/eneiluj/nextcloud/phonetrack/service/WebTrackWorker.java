@@ -122,11 +122,12 @@ public class WebTrackWorker extends Worker {
             if (sync.getFailedLogjobIds().contains(logjob.getId())
                     && logjob.getAutomation() != null
                     && logjob.getAutomation().uploadPolicy != null
-                    && logjob.getAutomation().uploadPolicy.retryMinutes > 0) {
-                int minutes = logjob.getAutomation().uploadPolicy.retryMinutes;
-                scheduler.gateAfterFailure(logjob.getId(), minutes);
+                    && logjob.getAutomation().uploadPolicy.backoff != null
+                    && logjob.getAutomation().uploadPolicy.backoff.isSet()) {
+                LogjobAutomation.Backoff backoff = logjob.getAutomation().uploadPolicy.backoff;
+                scheduler.gateAfterFailure(logjob.getId(), backoff);
                 SystemLogger.w(TAG, "Upload of logjob " + logjob.getId() + " failed: retrying in "
-                        + minutes + " minutes (server considered down)");
+                        + backoff.minutesForAttempt(0) + "+ minutes (server considered down)");
             }
         }
     }
