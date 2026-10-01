@@ -159,8 +159,19 @@
     <string name="syslog_saved_success">Activity log exported in %s</string>
     <string name="delete_logjob_menu_title">Delete logjob</string>
     <string name="manage_accounts">Manage accounts</string>
-
-    <string name="is_running">running (%1$s pending, %2$s sent)</string>
+    <string name="automation_title">Pause this log job automatically</string>
+    <string name="automation_pause_between_times">Pause between times (every day)</string>
+    <string name="automation_start_time">Start time (HH:MM)</string>
+    <string name="automation_end_time">End time (HH:MM)</string>
+    <string name="automation_pause_on_wifi">Pause while connected to Wi-Fi</string>
+    <string name="automation_wifi_ssids_hint">Wi-Fi names (SSIDs), comma separated</string>
+    <string name="automation_pause_at_location">Pause at a location</string>
+    <string name="automation_latitude">Latitude</string>
+    <string name="automation_longitude">Longitude</string>
+    <string name="automation_radius_m">Radius (m)</string>
+    <string name="automation_invalid_time">Enter a time as HH:MM</string>
+    <string name="automation_paused_notification">%1$d paused by automation</string>
+<string name="is_running">running (%1$s pending, %2$s sent)</string>
 
     <!-- Settings -->
     <string name="settings_server_settings">Account</string>

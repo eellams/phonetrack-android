@@ -32,6 +32,7 @@ import net.eneiluj.nextcloud.phonetrack.service.LoggerService;
 import net.eneiluj.nextcloud.phonetrack.util.CredentialStore;
 import net.eneiluj.nextcloud.phonetrack.util.ICallback;
 import net.eneiluj.nextcloud.phonetrack.util.CorrectingLocation;
+import net.eneiluj.nextcloud.phonetrack.util.LogjobAutomation;
 import net.eneiluj.nextcloud.phonetrack.util.SupportUtil;
 
 /**
@@ -41,7 +42,7 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
 
     private static final String TAG = PhoneTrackSQLiteOpenHelper.class.getSimpleName();
 
-    private static final int database_version = 20;
+    private static final int database_version = 21;
     private static final String database_name = "NEXTCLOUD_PHONETRACK";
 
     private static final String table_sessions = "SESSIONS";
@@ -76,6 +77,7 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
     private static final String key_login = "LOGIN";
     private static final String key_password = "PASSWORD";
     private static final String key_json = "JSON";
+    private static final String key_automation = "AUTOMATION";
 
     private static final String table_locations = "LOCATIONS";
     private static final String key_logjobid = "LOGJOBID";
@@ -110,7 +112,7 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
             key_lastSyncErrorTimestamp, key_lastSyncErrorText, key_useSignificantMotion,
             key_useSignificantMotionMixed, key_locationTimeout,
             key_lastActivationSystemTimestamp, key_lastActivationGpsTimestamp,
-            key_login, key_password, key_json
+            key_login, key_password, key_json, key_automation
     };
     private static final String[] columnsLocations = {
             key_id, key_logjobid, key_lat, key_lon, key_time,
@@ -212,7 +214,8 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
                 key_password + " TEXT DEFAULT NULL, " +
                 key_useSignificantMotion + " INTEGER DEFAULT 0," +
                 key_useSignificantMotionMixed + " INTEGER DEFAULT 0," +
-                key_locationTimeout + " INTEGER)"
+                key_locationTimeout + " INTEGER," +
+                key_automation + " TEXT DEFAULT NULL)"
         );
     }
 
@@ -288,6 +291,9 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
         }
         if (oldVersion < 20) {
             moveLogjobPasswordsToCredentialStore(db, context);
+        }
+        if (oldVersion < 21) {
+            db.execSQL("ALTER TABLE " + table_logjobs + " ADD COLUMN " + key_automation + " TEXT DEFAULT NULL");
         }
     }
 
@@ -431,6 +437,7 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
         values.put(key_login, logjob.getLogin());
         // the password lives in CredentialStore, not in the (backed up) database
         values.putNull(key_password);
+        values.put(key_automation, logjob.getAutomation() == null ? null : logjob.getAutomation().toJson());
         long id = db.insert(table_logjobs, null, values);
         if (id != -1) {
             CredentialStore.setLogjobPassword(context, id, logjob.getPassword());
@@ -498,7 +505,7 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
      */
     @NonNull
     private DBLogjob getLogjobFromCursor(@NonNull Cursor cursor) {
-        return new DBLogjob(cursor.getLong(0),
+        DBLogjob logjob = new DBLogjob(cursor.getLong(0),
                 cursor.getString(1),
                 cursor.getString(2),
                 cursor.getString(3),
@@ -517,6 +524,8 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
                 CredentialStore.getLogjobPassword(context, cursor.getLong(0)),
                 cursor.getInt(23) == 1
         );
+        logjob.setAutomation(LogjobAutomation.fromJson(cursor.isNull(24) ? null : cursor.getString(24)));
+        return logjob;
     }
 
     /**
@@ -713,6 +722,17 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
         }
     }
 
+    /**
+     * Persists only the automation conditions of a log job, leaving every other
+     * column (and the sync scheduling) untouched.
+     */
+    public void updateLogjobAutomation(long logjobId, @Nullable LogjobAutomation automation) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(key_automation, automation == null ? null : automation.toJson());
+        db.update(table_logjobs, values, key_id + " = ?", new String[]{String.valueOf(logjobId)});
+    }
+
     public DBLogjob updateLogjobAndSync(@NonNull DBLogjob oldLogjob, @Nullable String newTitle, @Nullable String newToken,
                                         @Nullable String newUrl, @Nullable String newDevicename, boolean newPost,
                                         int newMinTime, int newMinDistance, int newMinAccuracy,
@@ -761,6 +781,7 @@ public class PhoneTrackSQLiteOpenHelper extends SQLiteOpenHelper {
         values.put(key_locationTimeout, newLogjob.getLocationRequestTimeout());
         values.put(key_login, newLogjob.getLogin());
         values.putNull(key_password);
+        values.put(key_automation, newLogjob.getAutomation() == null ? null : newLogjob.getAutomation().toJson());
         int rows = db.update(table_logjobs, values, key_id + " = ?", new String[]{String.valueOf(newLogjob.getId())});
         if (rows > 0) {
             CredentialStore.setLogjobPassword(context, newLogjob.getId(), newLogjob.getPassword());

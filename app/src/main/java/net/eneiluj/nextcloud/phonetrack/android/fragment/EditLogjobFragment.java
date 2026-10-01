@@ -64,6 +64,7 @@ import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
 import net.eneiluj.nextcloud.phonetrack.service.LoggerService;
 import net.eneiluj.nextcloud.phonetrack.util.KeyboardUtil;
+import net.eneiluj.nextcloud.phonetrack.util.LogjobAutomation;
 import net.eneiluj.nextcloud.phonetrack.util.ICallback;
 import net.eneiluj.nextcloud.phonetrack.util.PhoneTrack;
 import net.eneiluj.nextcloud.phonetrack.util.ThemeUtils;
@@ -118,6 +119,18 @@ public abstract class EditLogjobFragment extends Fragment {
     protected CheckBox editUseSignificantMotionInterval;
     protected CheckBox editUseSignificantMotionMixed;
     protected EditText editLocationRequestTimeout;
+
+    protected CheckBox automationTimeWindowEnabled;
+    protected LinearLayout automationTimeWindowFields;
+    protected EditText automationStartTime;
+    protected EditText automationEndTime;
+    protected CheckBox automationWifiEnabled;
+    protected EditText automationWifiSsids;
+    protected CheckBox automationFenceEnabled;
+    protected LinearLayout automationFenceFields;
+    protected EditText automationLatitude;
+    protected EditText automationLongitude;
+    protected EditText automationRadius;
 
     protected LinearLayout editUseSignificantMotionLayout;
     protected LinearLayout editUseSignificantMotionIntervalLayout;
@@ -251,6 +264,45 @@ public abstract class EditLogjobFragment extends Fragment {
 
         String timeoutVal = String.valueOf(logjob.getLocationRequestTimeout());
         editLocationRequestTimeout.setText(timeoutVal);
+
+        automationTimeWindowEnabled = view.findViewById(R.id.automationTimeWindowEnabled);
+        automationTimeWindowFields = view.findViewById(R.id.automationTimeWindowFields);
+        automationStartTime = view.findViewById(R.id.automationStartTime);
+        automationEndTime = view.findViewById(R.id.automationEndTime);
+        automationWifiEnabled = view.findViewById(R.id.automationWifiEnabled);
+        automationWifiSsids = view.findViewById(R.id.automationWifiSsids);
+        automationFenceEnabled = view.findViewById(R.id.automationFenceEnabled);
+        automationFenceFields = view.findViewById(R.id.automationFenceFields);
+        automationLatitude = view.findViewById(R.id.automationLatitude);
+        automationLongitude = view.findViewById(R.id.automationLongitude);
+        automationRadius = view.findViewById(R.id.automationRadius);
+        LogjobAutomation automation = logjob.getAutomation();
+        if (automation != null) {
+            if (automation.timeWindow != null) {
+                automationTimeWindowEnabled.setChecked(true);
+                automationTimeWindowFields.setVisibility(View.VISIBLE);
+                automationStartTime.setText(LogjobAutomation.formatHhMm(automation.timeWindow.startMinutes));
+                automationEndTime.setText(LogjobAutomation.formatHhMm(automation.timeWindow.endMinutes));
+            }
+            if (!automation.wifiSsids.isEmpty()) {
+                automationWifiEnabled.setChecked(true);
+                automationWifiSsids.setVisibility(View.VISIBLE);
+                automationWifiSsids.setText(android.text.TextUtils.join(", ", automation.wifiSsids));
+            }
+            if (automation.fence != null) {
+                automationFenceEnabled.setChecked(true);
+                automationFenceFields.setVisibility(View.VISIBLE);
+                automationLatitude.setText(String.valueOf(automation.fence.latitude));
+                automationLongitude.setText(String.valueOf(automation.fence.longitude));
+                automationRadius.setText(String.valueOf(automation.fence.radius));
+            }
+        }
+        automationTimeWindowEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationTimeWindowFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        automationWifiEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationWifiSsids.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        automationFenceEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                automationFenceFields.setVisibility(isChecked ? View.VISIBLE : View.GONE));
         // Setup significant motion option, only show if device supports it
         if (deviceSupportsSignificantMotion()) {
             editUseSignificantMotion.setChecked(logjob.useSignificantMotion());
@@ -796,6 +848,50 @@ public abstract class EditLogjobFragment extends Fragment {
         catch (Exception e) {
             return 60;
         }
+    }
+
+    /**
+     * Builds the automation conditions from the form, or null when nothing is set.
+     * Invalid input (bad time format, unparsable numbers) means the condition
+     * is dropped, so a typo cannot silently pause a log job forever.
+     */
+    @Nullable
+    protected LogjobAutomation buildAutomationFromForm() {
+        LogjobAutomation.TimeWindow timeWindow = null;
+        if (automationTimeWindowEnabled.isChecked()) {
+            int start = LogjobAutomation.parseHhMm(automationStartTime.getText().toString());
+            int end = LogjobAutomation.parseHhMm(automationEndTime.getText().toString());
+            if (start >= 0 && end >= 0) {
+                timeWindow = new LogjobAutomation.TimeWindow(start, end);
+            } else {
+                showToast(getString(R.string.automation_invalid_time), Toast.LENGTH_SHORT);
+            }
+        }
+        List<String> ssids = new ArrayList<>();
+        if (automationWifiEnabled.isChecked() && automationWifiSsids.getText() != null) {
+            for (String ssid : automationWifiSsids.getText().toString().split(",")) {
+                String trimmed = ssid.trim();
+                if (!trimmed.isEmpty()) {
+                    ssids.add(trimmed);
+                }
+            }
+        }
+        LogjobAutomation.Fence fence = null;
+        if (automationFenceEnabled.isChecked()) {
+            try {
+                double lat = Double.parseDouble(automationLatitude.getText().toString());
+                double lon = Double.parseDouble(automationLongitude.getText().toString());
+                int radius = Integer.parseInt(automationRadius.getText().toString());
+                if (radius > 0) {
+                    fence = new LogjobAutomation.Fence(lat, lon, radius);
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (timeWindow == null && ssids.isEmpty() && fence == null) {
+            return null;
+        }
+        return new LogjobAutomation(timeWindow, ssids, fence);
     }
 
     protected void showToast(CharSequence text, int duration) {

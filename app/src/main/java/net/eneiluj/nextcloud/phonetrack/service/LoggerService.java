@@ -53,8 +53,10 @@ import androidx.core.app.ServiceCompat;
 import androidx.core.app.TaskStackBuilder;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import net.eneiluj.nextcloud.phonetrack.R;
@@ -62,6 +64,7 @@ import net.eneiluj.nextcloud.phonetrack.android.activity.LogjobsListViewActivity
 import net.eneiluj.nextcloud.phonetrack.android.fragment.PreferencesFragment;
 import net.eneiluj.nextcloud.phonetrack.model.DBLogjob;
 import net.eneiluj.nextcloud.phonetrack.persistence.PhoneTrackSQLiteOpenHelper;
+import net.eneiluj.nextcloud.phonetrack.util.AutomationEngine;
 import net.eneiluj.nextcloud.phonetrack.util.SupportUtil;
 import net.eneiluj.nextcloud.phonetrack.util.CorrectingLocation;
 import net.eneiluj.nextcloud.phonetrack.util.SystemLogger;
@@ -123,6 +126,8 @@ public class LoggerService extends Service {
     public static boolean DEBUG = true;
 
     private Map<Long, LogjobWorker> mLogjobWorkers;
+    private final Set<Long> automationPausedJobIds = new HashSet<>();
+    private AutomationEngine automationEngine;
 
     private ConnectionStateMonitor connectionMonitor;
     private BroadcastReceiver powerSaverChangeReceiver;
@@ -552,6 +557,32 @@ public class LoggerService extends Service {
     }
 
     /**
+     * Whether the logjob's automation conditions (time window, Wi-Fi SSID, fence)
+     * currently pause it: no location is requested while paused, so the logjob
+     * costs nothing until the condition clears. Evaluated again at every
+     * acquisition attempt, so no background watcher is needed for time and Wi-Fi.
+     */
+    private boolean isAutomationPaused(DBLogjob lj) {
+        if (lj.getAutomation() == null || !lj.getAutomation().hasAnyCondition()) {
+            automationPausedJobIds.remove(lj.getId());
+            return false;
+        }
+        if (automationEngine == null) {
+            automationEngine = new AutomationEngine(new AutomationEngine.RealDeviceState(this));
+        }
+        boolean paused = automationEngine.isPaused(lj.getAutomation());
+        if (paused) {
+            automationPausedJobIds.add(lj.getId());
+        } else {
+            automationPausedJobIds.remove(lj.getId());
+        }
+        if (isRunning) {
+            updateNotificationContent();
+        }
+        return paused;
+    }
+
+    /**
      * Request location updates
      * @return True if succeeded from at least one provider
      */
@@ -565,6 +596,10 @@ public class LoggerService extends Service {
         LogjobWorker logjobWorker = mLogjobWorkers.get(ljId);
         if (lj == null || gpsLocListener == null || networkLocListener == null || logjobWorker == null) {
             SystemLogger.d(TAG, "requestLocationUpdates ERROR for job " + ljId + ". Unexpected null value.");
+            return false;
+        }
+        if (isAutomationPaused(lj)) {
+            SystemLogger.d(TAG, "requestLocationUpdates job " + ljId + " skipped: paused by automation condition");
             return false;
         }
         boolean hasLocationUpdates = false;
@@ -772,7 +807,14 @@ public class LoggerService extends Service {
     private void updateNotificationContent() {
         String nbLocations = String.valueOf(db.getLocationNotSyncedCount());
         String nbSent = String.valueOf(db.getNbTotalSync());
-        mNotificationBuilder.setContentText(String.format(getString(R.string.is_running), nbLocations, nbSent));
+        String text;
+        if (!automationPausedJobIds.isEmpty()) {
+            text = String.format(getString(R.string.is_running), nbLocations, nbSent)
+                    + " · " + getString(R.string.automation_paused_notification, automationPausedJobIds.size());
+        } else {
+            text = String.format(getString(R.string.is_running), nbLocations, nbSent);
+        }
+        mNotificationBuilder.setContentText(text);
         mNotificationManager.notify(this.NOTIFICATION_ID, mNotificationBuilder.build());
     }
 
